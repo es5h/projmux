@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -199,6 +200,44 @@ func TestAppRunSessionPopupCycleWindow(t *testing.T) {
 	}
 }
 
+func TestAppRunSessionPopupOpen(t *testing.T) {
+	t.Parallel()
+
+	store := &stubPreviewStore{
+		readSelection: corepreview.Selection{
+			SessionName: "dev",
+			WindowIndex: "3",
+			PaneIndex:   "8",
+		},
+		readFound: true,
+	}
+	opener := &stubSessionPopupOpener{}
+
+	app := &App{
+		sessionPopup: &sessionPopupCommand{
+			store:  store,
+			opener: opener,
+		},
+	}
+
+	if err := app.Run([]string{"session-popup", "open", "dev"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if got, want := store.readSession, "dev"; got != want {
+		t.Fatalf("ReadSelection session = %q, want %q", got, want)
+	}
+	if got, want := opener.sessionName, "dev"; got != want {
+		t.Fatalf("open session = %q, want %q", got, want)
+	}
+	if got, want := opener.windowIndex, "3"; got != want {
+		t.Fatalf("open window = %q, want %q", got, want)
+	}
+	if got, want := opener.paneIndex, "8"; got != want {
+		t.Fatalf("open pane = %q, want %q", got, want)
+	}
+}
+
 func TestSessionPopupPreviewReportsNoSelectionModel(t *testing.T) {
 	t.Parallel()
 
@@ -240,6 +279,8 @@ func TestSessionPopupCommandRejectsInvalidUsage(t *testing.T) {
 		{name: "unknown subcommand", args: []string{"nope"}, want: "unknown session-popup subcommand: nope"},
 		{name: "missing preview args", args: []string{"preview"}, want: "session-popup preview requires exactly 1 argument"},
 		{name: "blank session", args: []string{"preview", " "}, want: "session-popup preview requires a non-empty <session> argument"},
+		{name: "missing open args", args: []string{"open"}, want: "session-popup open requires exactly 1 argument"},
+		{name: "blank open session", args: []string{"open", " "}, want: "session-popup open requires a non-empty <session> argument"},
 		{name: "missing cycle args", args: []string{"cycle-pane"}, want: "session-popup cycle-pane requires exactly 2 arguments"},
 		{name: "bad cycle direction", args: []string{"cycle-window", "dev", "later"}, want: "direction must be <next|prev>"},
 	}
@@ -274,6 +315,7 @@ func TestSessionPopupCommandReportsConfigurationAndRuntimeErrors(t *testing.T) {
 	}{
 		{name: "store setup", cmd: &sessionPopupCommand{storeErr: errors.New("no state dir")}, want: "configure session-popup store"},
 		{name: "inventory setup", cmd: &sessionPopupCommand{store: &stubPreviewStore{}, inventoryErr: errors.New("missing adapter")}, want: "configure session-popup inventory"},
+		{name: "opener setup", cmd: &sessionPopupCommand{store: &stubPreviewStore{}, openerErr: errors.New("missing tmux adapter")}, args: []string{"open", "dev"}, want: "configure session-popup opener"},
 		{
 			name: "selection load",
 			cmd: &sessionPopupCommand{
@@ -300,6 +342,27 @@ func TestSessionPopupCommandReportsConfigurationAndRuntimeErrors(t *testing.T) {
 				},
 			},
 			want: "load popup preview panes",
+		},
+		{
+			name: "open selection load",
+			cmd: &sessionPopupCommand{
+				store:  &stubPreviewStore{readErr: errors.New("read failed")},
+				opener: &stubSessionPopupOpener{},
+			},
+			want: "load popup open selection",
+			args: []string{"open", "dev"},
+		},
+		{
+			name: "open target",
+			cmd: &sessionPopupCommand{
+				store: &stubPreviewStore{
+					readSelection: corepreview.Selection{SessionName: "dev", WindowIndex: "2", PaneIndex: "1"},
+					readFound:     true,
+				},
+				opener: &stubSessionPopupOpener{err: errors.New("switch failed")},
+			},
+			want: "open popup target",
+			args: []string{"open", "dev"},
 		},
 		{
 			name: "cycle pane load",
@@ -357,4 +420,18 @@ func TestSessionPopupCommandReportsConfigurationAndRuntimeErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+type stubSessionPopupOpener struct {
+	sessionName string
+	windowIndex string
+	paneIndex   string
+	err         error
+}
+
+func (s *stubSessionPopupOpener) OpenSessionTarget(_ context.Context, sessionName, windowIndex, paneIndex string) error {
+	s.sessionName = sessionName
+	s.windowIndex = windowIndex
+	s.paneIndex = paneIndex
+	return s.err
 }

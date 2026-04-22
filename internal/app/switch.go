@@ -147,16 +147,21 @@ func (c *switchCommand) Run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	plan, err := c.plan(*ui)
-	if err != nil {
-		return err
-	}
+	ctx := context.Background()
+	for {
+		plan, err := c.plan(*ui)
+		if err != nil {
+			return err
+		}
 
-	if err := c.execute(context.Background(), plan, stdout); err != nil {
-		return err
+		reopen, err := c.execute(ctx, plan, stdout)
+		if err != nil {
+			return err
+		}
+		if !reopen {
+			return nil
+		}
 	}
-
-	return nil
 }
 
 func (c *switchCommand) plan(ui string) (switchPlan, error) {
@@ -192,23 +197,7 @@ func (c *switchCommand) runToggleTag(args []string, stdout, stderr io.Writer) er
 		return err
 	}
 
-	store, err := c.loadTagStore()
-	if err != nil {
-		return err
-	}
-
-	tagged, err := store.Toggle(target)
-	if err != nil {
-		return fmt.Errorf("toggle switch candidate tag: %w", err)
-	}
-
-	if tagged {
-		_, err = fmt.Fprintf(stdout, "tagged: %s\n", target)
-		return err
-	}
-
-	_, err = fmt.Fprintf(stdout, "untagged: %s\n", target)
-	return err
+	return c.toggleTag(target, stdout)
 }
 
 func (c *switchCommand) planFromInputs(ui string, inputs candidates.Inputs) (switchPlan, error) {
@@ -516,42 +505,31 @@ func (c *switchCommand) completePlan(plan switchPlan) (switchPlan, error) {
 	return plan, nil
 }
 
-func (c *switchCommand) execute(ctx context.Context, plan switchPlan, stdout io.Writer) error {
+func (c *switchCommand) execute(ctx context.Context, plan switchPlan, stdout io.Writer) (bool, error) {
 	if plan.Selection == "" {
-		return nil
+		return false, nil
 	}
 	if plan.Action == switchTagExpectKey {
-		store, err := c.loadTagStore()
-		if err != nil {
-			return err
+		if err := c.toggleTag(plan.Selection, nil); err != nil {
+			return false, err
 		}
-
-		tagged, err := store.Toggle(plan.Selection)
-		if err != nil {
-			return fmt.Errorf("toggle switch tag: %w", err)
-		}
-		if tagged {
-			_, err = fmt.Fprintf(stdout, "tagged: %s\n", plan.Selection)
-			return err
-		}
-		_, err = fmt.Fprintf(stdout, "untagged: %s\n", plan.Selection)
-		return err
+		return true, nil
 	}
 	if plan.SessionName == "" {
-		return fmt.Errorf("switch command requires a target session")
+		return false, fmt.Errorf("switch command requires a target session")
 	}
 	if c.sessions == nil {
-		return fmt.Errorf("switch session executor is not configured")
+		return false, fmt.Errorf("switch session executor is not configured")
 	}
 
 	if err := c.sessions.EnsureSession(ctx, plan.SessionName, plan.Selection); err != nil {
-		return fmt.Errorf("ensure tmux session %q: %w", plan.SessionName, err)
+		return false, fmt.Errorf("ensure tmux session %q: %w", plan.SessionName, err)
 	}
 	if err := c.sessions.OpenSession(ctx, plan.SessionName); err != nil {
-		return fmt.Errorf("open tmux session %q: %w", plan.SessionName, err)
+		return false, fmt.Errorf("open tmux session %q: %w", plan.SessionName, err)
 	}
 
-	return nil
+	return false, nil
 }
 
 func (c *switchCommand) runPicker(plan switchPlan) (intfzf.Result, error) {
@@ -570,6 +548,29 @@ func (c *switchCommand) runPicker(plan switchPlan) (intfzf.Result, error) {
 	}
 
 	return result, nil
+}
+
+func (c *switchCommand) toggleTag(target string, stdout io.Writer) error {
+	store, err := c.loadTagStore()
+	if err != nil {
+		return err
+	}
+
+	tagged, err := store.Toggle(target)
+	if err != nil {
+		return fmt.Errorf("toggle switch candidate tag: %w", err)
+	}
+	if stdout == nil {
+		return nil
+	}
+
+	if tagged {
+		_, err = fmt.Fprintf(stdout, "tagged: %s\n", target)
+		return err
+	}
+
+	_, err = fmt.Fprintf(stdout, "untagged: %s\n", target)
+	return err
 }
 
 func (c *switchCommand) renderRows(ctx context.Context, candidatePaths []string) ([]intfzf.Entry, error) {
@@ -648,5 +649,5 @@ func printSwitchUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --ui string   Candidate surface to prepare (popup or sidebar) (default \"popup\")")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Picker Actions:")
-	fmt.Fprintln(w, "  alt-t         Toggle a tag on the focused candidate and exit")
+	fmt.Fprintln(w, "  alt-t         Toggle a tag on the focused candidate and reopen the picker")
 }

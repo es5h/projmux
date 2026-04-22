@@ -13,6 +13,7 @@ import (
 )
 
 type tmuxPopupClient interface {
+	CurrentPanePath(ctx context.Context) (string, error)
 	DisplayPopupWithOptions(ctx context.Context, command string, options inttmux.PopupOptions) error
 }
 
@@ -20,6 +21,7 @@ type tmuxCommand struct {
 	popup        tmuxPopupClient
 	executable   func() (string, error)
 	popupOptions func(sessionName string) inttmux.PopupOptions
+	switchPopup  func() inttmux.PopupOptions
 }
 
 func newTmuxCommand() *tmuxCommand {
@@ -27,6 +29,7 @@ func newTmuxCommand() *tmuxCommand {
 		popup:        inttmux.NewClient(inttmux.ExecRunner{}),
 		executable:   os.Executable,
 		popupOptions: defaultPopupPreviewOptions,
+		switchPopup:  defaultPopupSwitchOptions,
 	}
 }
 
@@ -46,6 +49,8 @@ func (c *tmuxCommand) Run(args []string, stdout, stderr io.Writer) error {
 	switch fs.Arg(0) {
 	case "popup-preview":
 		return c.runPopupPreview(fs.Args()[1:], stderr)
+	case "popup-switch":
+		return c.runPopupSwitch(fs.Args()[1:], stderr)
 	case "help", "--help", "-h":
 		printTmuxUsage(stdout)
 		return nil
@@ -104,6 +109,45 @@ func parseTmuxPopupPreviewArgs(args []string, stderr io.Writer) (string, error) 
 	return sessionName, nil
 }
 
+func (c *tmuxCommand) runPopupSwitch(args []string, stderr io.Writer) error {
+	if len(args) != 0 {
+		printTmuxUsage(stderr)
+		return fmt.Errorf("tmux popup-switch accepts no arguments")
+	}
+	if c.popup == nil {
+		return errors.New("configure tmux popup client: tmux popup client is not configured")
+	}
+	if c.executable == nil {
+		return errors.New("configure tmux popup executable: tmux popup executable resolver is not configured")
+	}
+
+	cwd, err := c.popup.CurrentPanePath(context.Background())
+	if err != nil {
+		return fmt.Errorf("resolve tmux popup switch cwd: %w", err)
+	}
+
+	binaryPath, err := c.executable()
+	if err != nil {
+		return fmt.Errorf("resolve tmux popup executable: %w", err)
+	}
+
+	command, err := inttmux.BuildPopupSwitchCommand(binaryPath, cwd)
+	if err != nil {
+		return fmt.Errorf("build tmux popup switch command: %w", err)
+	}
+
+	options := defaultPopupSwitchOptions()
+	if c.switchPopup != nil {
+		options = c.switchPopup()
+	}
+
+	if err := c.popup.DisplayPopupWithOptions(context.Background(), command, options); err != nil {
+		return fmt.Errorf("display tmux popup switch: %w", err)
+	}
+
+	return nil
+}
+
 func defaultPopupPreviewOptions(sessionName string) inttmux.PopupOptions {
 	return inttmux.PopupOptions{
 		Width:         "80%",
@@ -113,7 +157,17 @@ func defaultPopupPreviewOptions(sessionName string) inttmux.PopupOptions {
 	}
 }
 
+func defaultPopupSwitchOptions() inttmux.PopupOptions {
+	return inttmux.PopupOptions{
+		Width:         "80%",
+		Height:        "70%",
+		Title:         "projmux switch",
+		CloseBehavior: inttmux.PopupCloseOnExit,
+	}
+}
+
 func printTmuxUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  projmux tmux popup-preview <session>")
+	fmt.Fprintln(w, "  projmux tmux popup-switch")
 }

@@ -20,11 +20,17 @@ type sessionPopupStore interface {
 	CycleWindowSelection(sessionName string, windows []corepreview.Window, panes []corepreview.Pane, direction corepreview.Direction) (corepreview.CycleResult, error)
 }
 
+type sessionPopupOpener interface {
+	OpenSessionTarget(ctx context.Context, sessionName, windowIndex, paneIndex string) error
+}
+
 type sessionPopupCommand struct {
 	store        sessionPopupStore
 	storeErr     error
 	inventory    previewInventory
 	inventoryErr error
+	opener       sessionPopupOpener
+	openerErr    error
 }
 
 func newSessionPopupCommand() *sessionPopupCommand {
@@ -33,6 +39,7 @@ func newSessionPopupCommand() *sessionPopupCommand {
 
 	cmd := &sessionPopupCommand{
 		inventory: tmuxPreviewInventory{client: client},
+		opener:    client,
 	}
 	if err != nil {
 		cmd.storeErr = fmt.Errorf("resolve default config paths: %w", err)
@@ -59,6 +66,8 @@ func (c *sessionPopupCommand) Run(args []string, stdout, stderr io.Writer) error
 	switch fs.Arg(0) {
 	case "preview":
 		return c.runPreview(fs.Args()[1:], stdout, stderr)
+	case "open":
+		return c.runOpen(fs.Args()[1:], stderr)
 	case "cycle-pane":
 		return c.runCyclePane(fs.Args()[1:], stdout, stderr)
 	case "cycle-window":
@@ -73,7 +82,7 @@ func (c *sessionPopupCommand) Run(args []string, stdout, stderr io.Writer) error
 }
 
 func (c *sessionPopupCommand) runPreview(args []string, stdout, stderr io.Writer) error {
-	sessionName, err := parseSessionPopupPreviewArgs(args, stderr)
+	sessionName, err := parseSessionPopupSessionArg(args, "preview", stderr)
 	if err != nil {
 		return err
 	}
@@ -104,6 +113,41 @@ func (c *sessionPopupCommand) runPreview(args []string, stdout, stderr io.Writer
 	}
 
 	return writeSessionPopupPreview(stdout, sessionName, selection, hasSelection, windows, panes)
+}
+
+func (c *sessionPopupCommand) runOpen(args []string, stderr io.Writer) error {
+	sessionName, err := parseSessionPopupSessionArg(args, "open", stderr)
+	if err != nil {
+		return err
+	}
+
+	store, err := c.requireStore()
+	if err != nil {
+		return err
+	}
+
+	opener, err := c.requireOpener()
+	if err != nil {
+		return err
+	}
+
+	selection, hasSelection, err := store.ReadSelection(sessionName)
+	if err != nil {
+		return fmt.Errorf("load popup open selection for %q: %w", sessionName, err)
+	}
+
+	windowIndex := ""
+	paneIndex := ""
+	if hasSelection {
+		windowIndex = strings.TrimSpace(selection.WindowIndex)
+		paneIndex = strings.TrimSpace(selection.PaneIndex)
+	}
+
+	if err := opener.OpenSessionTarget(context.Background(), sessionName, windowIndex, paneIndex); err != nil {
+		return fmt.Errorf("open popup target for %q: %w", sessionName, err)
+	}
+
+	return nil
 }
 
 func (c *sessionPopupCommand) runCyclePane(args []string, stdout, stderr io.Writer) error {
@@ -219,16 +263,26 @@ func (c *sessionPopupCommand) requireInventory() (previewInventory, error) {
 	return c.inventory, nil
 }
 
-func parseSessionPopupPreviewArgs(args []string, stderr io.Writer) (string, error) {
+func (c *sessionPopupCommand) requireOpener() (sessionPopupOpener, error) {
+	if c.openerErr != nil {
+		return nil, fmt.Errorf("configure session-popup opener: %w", c.openerErr)
+	}
+	if c.opener == nil {
+		return nil, errors.New("configure session-popup opener: session-popup opener is not configured")
+	}
+	return c.opener, nil
+}
+
+func parseSessionPopupSessionArg(args []string, subcommand string, stderr io.Writer) (string, error) {
 	if len(args) != 1 {
 		printSessionPopupUsage(stderr)
-		return "", fmt.Errorf("session-popup preview requires exactly 1 argument: <session>")
+		return "", fmt.Errorf("session-popup %s requires exactly 1 argument: <session>", subcommand)
 	}
 
 	sessionName := strings.TrimSpace(args[0])
 	if sessionName == "" {
 		printSessionPopupUsage(stderr)
-		return "", fmt.Errorf("session-popup preview requires a non-empty <session> argument")
+		return "", fmt.Errorf("session-popup %s requires a non-empty <session> argument", subcommand)
 	}
 
 	return sessionName, nil
@@ -258,6 +312,7 @@ func parseSessionPopupCycleArgs(command string, args []string, stderr io.Writer)
 func printSessionPopupUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  projmux session-popup preview <session>")
+	fmt.Fprintln(w, "  projmux session-popup open <session>")
 	fmt.Fprintln(w, "  projmux session-popup cycle-pane <session> <next|prev>")
 	fmt.Fprintln(w, "  projmux session-popup cycle-window <session> <next|prev>")
 }

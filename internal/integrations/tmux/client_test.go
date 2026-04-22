@@ -792,6 +792,92 @@ func TestClientDisplayPopupWrapsRunnerError(t *testing.T) {
 	}
 }
 
+func TestClientOpenSessionTargetSwitchesToPaneInsideTmux(t *testing.T) {
+	t.Parallel()
+
+	runner := &scriptedRunner{
+		t:     t,
+		steps: []scriptedStep{{}},
+	}
+	client := newClientWithEnv(runner, func(string) string { return "/tmp/tmux-sock" })
+
+	if err := client.OpenSessionTarget(context.Background(), "dotfiles", "3", "8"); err != nil {
+		t.Fatalf("OpenSessionTarget returned error: %v", err)
+	}
+
+	want := []commandCall{
+		{name: "tmux", args: []string{"switch-client", "-t", "dotfiles:3.8"}},
+	}
+	if !reflect.DeepEqual(runner.calls, want) {
+		t.Fatalf("unexpected calls %#v", runner.calls)
+	}
+}
+
+func TestClientOpenSessionTargetAttachesToWindowOutsideTmux(t *testing.T) {
+	t.Parallel()
+
+	runner := &scriptedRunner{
+		t:     t,
+		steps: []scriptedStep{{}},
+	}
+	client := newClientWithEnv(runner, func(string) string { return "" })
+
+	if err := client.OpenSessionTarget(context.Background(), "dotfiles", "3", "8"); err != nil {
+		t.Fatalf("OpenSessionTarget returned error: %v", err)
+	}
+
+	want := []commandCall{
+		{name: "tmux", args: []string{"attach-session", "-t", "dotfiles:3"}},
+	}
+	if !reflect.DeepEqual(runner.calls, want) {
+		t.Fatalf("unexpected calls %#v", runner.calls)
+	}
+}
+
+func TestClientOpenSessionTargetRequiresSessionName(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
+		t.Fatal("runner should not be called")
+		return nil, nil
+	}))
+
+	err := client.OpenSessionTarget(context.Background(), "", "3", "8")
+	if !errors.Is(err, errSessionNameRequired) {
+		t.Fatalf("OpenSessionTarget error = %v, want %v", err, errSessionNameRequired)
+	}
+}
+
+func TestClientOpenSessionTargetRejectsPaneWithoutWindow(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
+		t.Fatal("runner should not be called")
+		return nil, nil
+	}))
+
+	err := client.OpenSessionTarget(context.Background(), "dotfiles", "", "8")
+	if !errors.Is(err, errWindowIndexRequired) {
+		t.Fatalf("OpenSessionTarget error = %v, want %v", err, errWindowIndexRequired)
+	}
+}
+
+func TestClientOpenSessionTargetWrapsRunnerError(t *testing.T) {
+	t.Parallel()
+
+	client := newClientWithEnv(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
+		return nil, errors.New("tmux failed")
+	}), func(string) string { return "/tmp/tmux-sock" })
+
+	err := client.OpenSessionTarget(context.Background(), "dotfiles", "3", "8")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "switch tmux target") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestBuildPopupPreviewCommandQuotesBinaryPathAndSession(t *testing.T) {
 	t.Parallel()
 
@@ -815,6 +901,32 @@ func TestBuildPopupPreviewCommandRequiresInputs(t *testing.T) {
 
 	if _, err := BuildPopupPreviewCommand("/tmp/projmux", " "); !errors.Is(err, errSessionNameRequired) {
 		t.Fatalf("unexpected error for session name: %v", err)
+	}
+}
+
+func TestBuildPopupSwitchCommandQuotesBinaryPathAndWorkingDirectory(t *testing.T) {
+	t.Parallel()
+
+	command, err := BuildPopupSwitchCommand("/tmp/projmux's bin", "/tmp/work tree")
+	if err != nil {
+		t.Fatalf("BuildPopupSwitchCommand returned error: %v", err)
+	}
+
+	const want = "cd -- '/tmp/work tree' && exec '/tmp/projmux'\\''s bin' 'switch' '--ui=popup'"
+	if command != want {
+		t.Fatalf("command = %q, want %q", command, want)
+	}
+}
+
+func TestBuildPopupSwitchCommandRequiresInputs(t *testing.T) {
+	t.Parallel()
+
+	if _, err := BuildPopupSwitchCommand(" ", "/tmp/work"); err == nil || !strings.Contains(err.Error(), "binary path is required") {
+		t.Fatalf("unexpected error for binary path: %v", err)
+	}
+
+	if _, err := BuildPopupSwitchCommand("/tmp/projmux", " "); err == nil || !strings.Contains(err.Error(), "working directory is required") {
+		t.Fatalf("unexpected error for working directory: %v", err)
 	}
 }
 

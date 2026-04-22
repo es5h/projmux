@@ -47,6 +47,42 @@ func TestAppRunTmuxPopupPreviewUsesDefaultOptions(t *testing.T) {
 	}
 }
 
+func TestAppRunTmuxPopupSwitchUsesCurrentPanePathAndDefaultOptions(t *testing.T) {
+	t.Parallel()
+
+	popup := &stubTmuxPopupClient{currentPanePath: "/tmp/work tree"}
+	app := &App{
+		tmux: &tmuxCommand{
+			popup:       popup,
+			executable:  func() (string, error) { return "/tmp/proj mux/bin/projmux", nil },
+			switchPopup: defaultPopupSwitchOptions,
+		},
+	}
+
+	var stdout bytes.Buffer
+	if err := app.Run([]string{"tmux", "popup-switch"}, &stdout, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+
+	const wantCommand = "cd -- '/tmp/work tree' && exec '/tmp/proj mux/bin/projmux' 'switch' '--ui=popup'"
+	if popup.command != wantCommand {
+		t.Fatalf("popup command = %q, want %q", popup.command, wantCommand)
+	}
+
+	wantOptions := inttmux.PopupOptions{
+		Width:         "80%",
+		Height:        "70%",
+		Title:         "projmux switch",
+		CloseBehavior: inttmux.PopupCloseOnExit,
+	}
+	if popup.options != wantOptions {
+		t.Fatalf("popup options = %#v, want %#v", popup.options, wantOptions)
+	}
+}
+
 func TestTmuxCommandRejectsInvalidUsage(t *testing.T) {
 	t.Parallel()
 
@@ -59,6 +95,7 @@ func TestTmuxCommandRejectsInvalidUsage(t *testing.T) {
 		{name: "unknown subcommand", args: []string{"nope"}, want: "unknown tmux subcommand: nope"},
 		{name: "missing popup args", args: []string{"popup-preview"}, want: "tmux popup-preview requires exactly 1 argument"},
 		{name: "blank session", args: []string{"popup-preview", " "}, want: "tmux popup-preview requires a non-empty <session> argument"},
+		{name: "popup-switch extra args", args: []string{"popup-switch", "extra"}, want: "tmux popup-switch accepts no arguments"},
 	}
 
 	for _, tt := range tests {
@@ -92,13 +129,19 @@ func TestTmuxCommandReportsConfigurationAndRuntimeErrors(t *testing.T) {
 		{name: "missing executable resolver", cmd: &tmuxCommand{popup: &stubTmuxPopupClient{}}, want: "configure tmux popup executable"},
 		{name: "resolve executable", cmd: &tmuxCommand{popup: &stubTmuxPopupClient{}, executable: func() (string, error) { return "", errors.New("not found") }}, want: "resolve tmux popup executable"},
 		{name: "display popup", cmd: &tmuxCommand{popup: &stubTmuxPopupClient{err: errors.New("tmux failed")}, executable: func() (string, error) { return "/tmp/projmux", nil }}, want: "display tmux popup preview"},
+		{name: "resolve current pane", cmd: &tmuxCommand{popup: &stubTmuxPopupClient{currentPaneErr: errors.New("tmux unavailable")}, executable: func() (string, error) { return "/tmp/projmux", nil }}, want: "resolve tmux popup switch cwd"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := tt.cmd.Run([]string{"popup-preview", "dev"}, &bytes.Buffer{}, &bytes.Buffer{})
+			args := []string{"popup-preview", "dev"}
+			if tt.want == "resolve tmux popup switch cwd" {
+				args = []string{"popup-switch"}
+			}
+
+			err := tt.cmd.Run(args, &bytes.Buffer{}, &bytes.Buffer{})
 			if err == nil {
 				t.Fatal("expected error")
 			}
@@ -110,9 +153,18 @@ func TestTmuxCommandReportsConfigurationAndRuntimeErrors(t *testing.T) {
 }
 
 type stubTmuxPopupClient struct {
-	command string
-	options inttmux.PopupOptions
-	err     error
+	currentPanePath string
+	currentPaneErr  error
+	command         string
+	options         inttmux.PopupOptions
+	err             error
+}
+
+func (s *stubTmuxPopupClient) CurrentPanePath(context.Context) (string, error) {
+	if s.currentPaneErr != nil {
+		return "", s.currentPaneErr
+	}
+	return s.currentPanePath, nil
 }
 
 func (s *stubTmuxPopupClient) DisplayPopupWithOptions(_ context.Context, command string, options inttmux.PopupOptions) error {

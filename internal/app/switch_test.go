@@ -470,12 +470,13 @@ func TestSwitchCommandToggleTagUsesCurrentSnappedCandidate(t *testing.T) {
 	}
 }
 
-func TestSwitchCommandPickerAltTRoutesToTagToggle(t *testing.T) {
+func TestSwitchCommandPickerAltTLoopsUntilSelection(t *testing.T) {
 	t.Parallel()
 
-	var gotRunnerOptions intfzf.Options
+	var gotRunnerOptions []intfzf.Options
 	store := &capturingSwitchTagStore{tagged: true}
 	executor := &capturingSwitchSessionExecutor{}
+	call := 0
 
 	cmd := &switchCommand{
 		discover: func(candidates.Inputs) ([]string, error) {
@@ -484,8 +485,12 @@ func TestSwitchCommandPickerAltTRoutesToTagToggle(t *testing.T) {
 		pinStore: func() (switchPinStore, error) { return stubSwitchPinStore{}, nil },
 		tagStore: func() (switchTagStore, error) { return store, nil },
 		runner: switchRunnerFunc(func(options intfzf.Options) (intfzf.Result, error) {
-			gotRunnerOptions = options
-			return intfzf.Result{Key: switchTagExpectKey, Value: "/tmp/app"}, nil
+			gotRunnerOptions = append(gotRunnerOptions, options)
+			call++
+			if call == 1 {
+				return intfzf.Result{Key: switchTagExpectKey, Value: "/tmp/app"}, nil
+			}
+			return intfzf.Result{Value: "/tmp/app"}, nil
 		}),
 		sessions:   executor,
 		identity:   stubSwitchIdentityResolver{name: "tmp-app"},
@@ -498,20 +503,28 @@ func TestSwitchCommandPickerAltTRoutesToTagToggle(t *testing.T) {
 	if err := cmd.Run(nil, &stdout, &bytes.Buffer{}); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if got, want := gotRunnerOptions.ExpectKeys, []string{switchTagExpectKey}; !equalStrings(got, want) {
-		t.Fatalf("runner expect keys = %q, want %q", got, want)
+	if got, want := len(gotRunnerOptions), 2; got != want {
+		t.Fatalf("runner calls = %d, want %d", got, want)
+	}
+	for i, options := range gotRunnerOptions {
+		if got, want := options.ExpectKeys, []string{switchTagExpectKey}; !equalStrings(got, want) {
+			t.Fatalf("runner expect keys call %d = %q, want %q", i, got, want)
+		}
+		if got, want := options.UI, switchUIPopup; got != want {
+			t.Fatalf("runner UI call %d = %q, want %q", i, got, want)
+		}
 	}
 	if got, want := store.calls, []string{"/tmp/app"}; !equalStrings(got, want) {
 		t.Fatalf("Toggle() calls = %q, want %q", got, want)
 	}
-	if got := executor.ensureSessionName; got != "" {
-		t.Fatalf("EnsureSession called unexpectedly: %q", got)
+	if got, want := executor.ensureSessionName, "tmp-app"; got != want {
+		t.Fatalf("ensure session = %q, want %q", got, want)
 	}
-	if got := executor.openSessionName; got != "" {
-		t.Fatalf("OpenSession called unexpectedly: %q", got)
+	if got, want := executor.openSessionName, "tmp-app"; got != want {
+		t.Fatalf("open session = %q, want %q", got, want)
 	}
-	if got, want := stdout.String(), "tagged: /tmp/app\n"; got != want {
-		t.Fatalf("stdout = %q, want %q", got, want)
+	if got := stdout.String(); got != "" {
+		t.Fatalf("stdout = %q, want empty for alt-t loop", got)
 	}
 }
 

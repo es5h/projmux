@@ -18,6 +18,7 @@ var (
 	errSessionCWDRequired         = errors.New("tmux session cwd is required")
 	errPopupCommandRequired       = errors.New("tmux popup command is required")
 	errPopupCloseBehaviorInvalid  = errors.New("tmux popup close behavior is invalid")
+	errWindowIndexRequired        = errors.New("tmux window index is required when pane index is set")
 	errSessionActivityInvalid     = errors.New("tmux session activity is invalid")
 	errWindowIndexInvalid         = errors.New("tmux window index is invalid")
 	errPaneIndexInvalid           = errors.New("tmux pane index is invalid")
@@ -247,6 +248,40 @@ func (c *Client) OpenSession(ctx context.Context, sessionName string) error {
 	return nil
 }
 
+// OpenSessionTarget opens a stored preview target. Outside tmux, pane targeting
+// degrades to session/window because attach-session cannot target a pane.
+func (c *Client) OpenSessionTarget(ctx context.Context, sessionName, windowIndex, paneIndex string) error {
+	sessionName = strings.TrimSpace(sessionName)
+	windowIndex = strings.TrimSpace(windowIndex)
+	paneIndex = strings.TrimSpace(paneIndex)
+
+	if sessionName == "" {
+		return errSessionNameRequired
+	}
+	if paneIndex != "" && windowIndex == "" {
+		return errWindowIndexRequired
+	}
+
+	target := sessionName
+	action := "attach"
+	command := []string{"attach-session", "-t", target}
+
+	if c.InsideSession() {
+		target = sessionPaneTarget(sessionName, windowIndex, paneIndex)
+		action = "switch"
+		command = []string{"switch-client", "-t", target}
+	} else if windowIndex != "" {
+		target = sessionWindowTarget(sessionName, windowIndex)
+		command = []string{"attach-session", "-t", target}
+	}
+
+	if _, err := c.runner.Run(ctx, "tmux", command...); err != nil {
+		return fmt.Errorf("%s tmux target %q: %w", action, target, err)
+	}
+
+	return nil
+}
+
 // SwitchClient switches the active tmux client to the target session.
 func (c *Client) SwitchClient(ctx context.Context, sessionName string) error {
 	if strings.TrimSpace(sessionName) == "" {
@@ -366,6 +401,22 @@ func BuildPopupPreviewCommand(binaryPath, sessionName string) (string, error) {
 	return buildExecCommand(binaryPath, "session-popup", "preview", sessionName), nil
 }
 
+// BuildPopupSwitchCommand builds the shell command used inside a tmux popup
+// for the existing `projmux switch --ui=popup` flow.
+func BuildPopupSwitchCommand(binaryPath, cwd string) (string, error) {
+	binaryPath = strings.TrimSpace(binaryPath)
+	if binaryPath == "" {
+		return "", errors.New("popup switch binary path is required")
+	}
+
+	cwd = strings.TrimSpace(cwd)
+	if cwd == "" {
+		return "", errors.New("popup switch working directory is required")
+	}
+
+	return "cd -- " + shellQuote(cwd) + " && " + buildExecCommand(binaryPath, "switch", "--ui=popup"), nil
+}
+
 func buildExecCommand(binaryPath string, args ...string) string {
 	quoted := make([]string, 0, len(args)+2)
 	quoted = append(quoted, "exec", shellQuote(binaryPath))
@@ -380,6 +431,23 @@ func shellQuote(value string) string {
 		return "''"
 	}
 	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
+}
+
+func sessionWindowTarget(sessionName, windowIndex string) string {
+	if strings.TrimSpace(windowIndex) == "" {
+		return strings.TrimSpace(sessionName)
+	}
+
+	return fmt.Sprintf("%s:%s", strings.TrimSpace(sessionName), strings.TrimSpace(windowIndex))
+}
+
+func sessionPaneTarget(sessionName, windowIndex, paneIndex string) string {
+	target := sessionWindowTarget(sessionName, windowIndex)
+	if strings.TrimSpace(paneIndex) == "" {
+		return target
+	}
+
+	return fmt.Sprintf("%s.%s", target, strings.TrimSpace(paneIndex))
 }
 
 func resolvePopupOptions(options PopupOptions) (PopupOptions, error) {
