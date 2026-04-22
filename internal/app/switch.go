@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"github.com/es5h/projmux/internal/config"
 	"github.com/es5h/projmux/internal/core/candidates"
 	"github.com/es5h/projmux/internal/core/pins"
+	inttmux "github.com/es5h/projmux/internal/integrations/tmux"
 	intfzf "github.com/es5h/projmux/internal/ui/fzf"
 )
 
@@ -35,28 +37,46 @@ type switchRunner interface {
 	Run(options intfzf.Options) (string, error)
 }
 
+type switchSessionExecutor interface {
+	EnsureSession(ctx context.Context, sessionName, cwd string) error
+	OpenSession(ctx context.Context, sessionName string) error
+}
+
 type switchCommand struct {
-	discover   candidateDiscoverer
-	pinStore   switchPinStoreFactory
-	runner     switchRunner
-	homeDir    func() (string, error)
-	workingDir func() (string, error)
-	lookupEnv  func(string) string
+	discover    candidateDiscoverer
+	pinStore    switchPinStoreFactory
+	runner      switchRunner
+	sessions    switchSessionExecutor
+	identity    sessionIdentityResolver
+	identityErr error
+	validate    func(path string) error
+	homeDir     func() (string, error)
+	workingDir  func() (string, error)
+	lookupEnv   func(string) string
 }
 
 type switchPlan struct {
-	UI         string
-	Candidates []string
+	UI          string
+	Candidates  []string
+	Selection   string
+	SessionName string
 }
 
 func newSwitchCommand() *switchCommand {
+	client := inttmux.NewClient(inttmux.ExecRunner{})
+	identity, err := newDefaultCurrentIdentityResolver()
+
 	return &switchCommand{
-		discover:   candidates.Discover,
-		pinStore:   newDefaultSwitchPinStore,
-		runner:     intfzf.NewRunner(),
-		homeDir:    os.UserHomeDir,
-		workingDir: os.Getwd,
-		lookupEnv:  os.Getenv,
+		discover:    candidates.Discover,
+		pinStore:    newDefaultSwitchPinStore,
+		runner:      intfzf.NewRunner(),
+		sessions:    client,
+		identity:    identity,
+		identityErr: err,
+		validate:    validateDirectory,
+		homeDir:     os.UserHomeDir,
+		workingDir:  os.Getwd,
+		lookupEnv:   os.Getenv,
 	}
 }
 
@@ -98,7 +118,11 @@ func (c *switchCommand) Run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	return c.runPicker(plan, stdout)
+	if err := c.execute(context.Background(), plan); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *switchCommand) plan(ui string) (switchPlan, error) {
@@ -132,10 +156,12 @@ func (c *switchCommand) plan(ui string) (switchPlan, error) {
 		return switchPlan{}, fmt.Errorf("discover switch candidates: %w", err)
 	}
 
-	return switchPlan{
+	plan := switchPlan{
 		UI:         ui,
 		Candidates: paths,
-	}, nil
+	}
+
+	return c.completePlan(plan)
 }
 
 func (c *switchCommand) resolveHomeDir() (string, error) {
@@ -239,9 +265,68 @@ func validateSwitchUI(ui string) error {
 	}
 }
 
-func (c *switchCommand) runPicker(plan switchPlan, stdout io.Writer) error {
+func (c *switchCommand) completePlan(plan switchPlan) (switchPlan, error) {
 	if c.runner == nil {
-		return fmt.Errorf("switch runner is not configured")
+		return switchPlan{}, fmt.Errorf("switch picker is not configured")
+	}
+
+	selection, err := c.runPicker(plan)
+	if err != nil {
+		return switchPlan{}, err
+	}
+	selection = cleanOptionalPath(selection)
+	plan.Selection = selection
+	if selection == "" {
+		return plan, nil
+	}
+
+	if c.validate == nil {
+		return switchPlan{}, fmt.Errorf("switch directory validator is not configured")
+	}
+	if err := c.validate(selection); err != nil {
+		return switchPlan{}, err
+	}
+
+	if c.identityErr != nil {
+		return switchPlan{}, fmt.Errorf("configure session identity resolver: %w", c.identityErr)
+	}
+	if c.identity == nil {
+		return switchPlan{}, fmt.Errorf("switch session identity resolver is not configured")
+	}
+
+	sessionName, err := c.identity.SessionIdentityForPath(selection)
+	if err != nil {
+		return switchPlan{}, fmt.Errorf("resolve session identity: %w", err)
+	}
+	plan.SessionName = sessionName
+
+	return plan, nil
+}
+
+func (c *switchCommand) execute(ctx context.Context, plan switchPlan) error {
+	if plan.Selection == "" {
+		return nil
+	}
+	if plan.SessionName == "" {
+		return fmt.Errorf("switch command requires a target session")
+	}
+	if c.sessions == nil {
+		return fmt.Errorf("switch session executor is not configured")
+	}
+
+	if err := c.sessions.EnsureSession(ctx, plan.SessionName, plan.Selection); err != nil {
+		return fmt.Errorf("ensure tmux session %q: %w", plan.SessionName, err)
+	}
+	if err := c.sessions.OpenSession(ctx, plan.SessionName); err != nil {
+		return fmt.Errorf("open tmux session %q: %w", plan.SessionName, err)
+	}
+
+	return nil
+}
+
+func (c *switchCommand) runPicker(plan switchPlan) (string, error) {
+	if c.runner == nil {
+		return "", fmt.Errorf("switch runner is not configured")
 	}
 
 	selection, err := c.runner.Run(intfzf.Options{
@@ -249,15 +334,10 @@ func (c *switchCommand) runPicker(plan switchPlan, stdout io.Writer) error {
 		Candidates: plan.Candidates,
 	})
 	if err != nil {
-		return fmt.Errorf("run switch picker: %w", err)
+		return "", fmt.Errorf("run switch picker: %w", err)
 	}
 
-	if selection == "" {
-		return nil
-	}
-
-	_, err = fmt.Fprintln(stdout, selection)
-	return err
+	return selection, nil
 }
 
 func printSwitchUsage(w io.Writer) {
