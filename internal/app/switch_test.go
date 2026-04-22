@@ -91,8 +91,8 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 		t.Fatalf("runner candidates = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Entries, []intfzf.Entry{
-		{Label: "dotfiles  [new]  /home/tester", Value: "/home/tester"},
-		{Label: "dotfiles  [new]  /home/tester/dotfiles", Value: "/home/tester/dotfiles"},
+		{Label: "dotfiles  [new]  ~", Value: "/home/tester"},
+		{Label: "dotfiles  [new]  ~/dotfiles", Value: "/home/tester/dotfiles"},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
 	}
@@ -238,11 +238,11 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 		t.Fatalf("runner candidates = %q, want %q", got, wantCandidates)
 	}
 	wantEntries := []intfzf.Entry{
-		{Label: "home  [new]  " + fixture.path("home"), Value: fixture.path("home")},
-		{Label: "dotfiles  [new]  " + fixture.path("home/dotfiles"), Value: fixture.path("home/dotfiles")},
+		{Label: "home  [new]  ~", Value: fixture.path("home")},
+		{Label: "dotfiles  [new]  ~/dotfiles", Value: fixture.path("home/dotfiles")},
 		{Label: "pins-app  [new]  " + fixture.path("pins/app"), Value: fixture.path("pins/app")},
 		{Label: "managed-work-a  [new]  " + fixture.path("managed/work-a"), Value: fixture.path("managed/work-a")},
-		{Label: "rp-repo-a  [new]  " + fixture.path("rp/repo-a"), Value: fixture.path("rp/repo-a")},
+		{Label: "rp-repo-a  [new]  ~rp/repo-a", Value: fixture.path("rp/repo-a")},
 		{Label: "managed-work-b  [new]  " + fixture.path("managed/work-b"), Value: fixture.path("managed/work-b")},
 	}
 	if got := fakeRunner.last.Entries; !equalEntries(got, wantEntries) {
@@ -467,6 +467,40 @@ func TestSwitchCommandToggleTagUsesCurrentSnappedCandidate(t *testing.T) {
 	}
 	if got := stderr.String(); got != "" {
 		t.Fatalf("stderr = %q, want empty", got)
+	}
+}
+
+func TestSwitchCommandUsesDefaultManagedRootsWhenEnvUnset(t *testing.T) {
+	t.Parallel()
+
+	var gotInputs candidates.Inputs
+	cmd := &switchCommand{
+		discover: func(inputs candidates.Inputs) ([]string, error) {
+			gotInputs = inputs
+			return []string{"/tmp/app"}, nil
+		},
+		pinStore:   func() (switchPinStore, error) { return stubSwitchPinStore{}, nil },
+		runner:     switchRunnerFunc(func(intfzf.Options) (intfzf.Result, error) { return intfzf.Result{}, nil }),
+		sessions:   &capturingSwitchSessionExecutor{},
+		identity:   stubSwitchIdentityResolver{name: "tmp-app"},
+		validate:   func(string) error { return nil },
+		homeDir:    func() (string, error) { return "/home/tester", nil },
+		workingDir: func() (string, error) { return "/tmp", nil },
+		lookupEnv:  func(string) string { return "" },
+	}
+
+	if err := cmd.Run(nil, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if got, want := gotInputs.ManagedRoots, []string{
+		"/home/tester/source",
+		"/home/tester/work",
+		"/home/tester/projects",
+		"/home/tester/src",
+		"/home/tester/code",
+	}; !equalStrings(got, want) {
+		t.Fatalf("inputs.ManagedRoots = %q, want %q", got, want)
 	}
 }
 

@@ -1,6 +1,9 @@
 package render
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 type SwitchRow struct {
 	Label string
@@ -9,8 +12,40 @@ type SwitchRow struct {
 
 type SwitchCandidate struct {
 	Path        string
+	DisplayPath string
 	SessionName string
 	ModeLabel   string
+}
+
+func PrettyPath(path, homeDir, repoRoot string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+
+	path = filepath.Clean(path)
+	homeDir = cleanPrettyRoot(homeDir)
+	repoRoot = cleanPrettyRoot(repoRoot)
+
+	if repoRoot != "" {
+		if path == repoRoot {
+			return "~rp"
+		}
+		if strings.HasPrefix(path, repoRoot+string(filepath.Separator)) {
+			return "~rp" + strings.TrimPrefix(path, repoRoot)
+		}
+	}
+
+	if homeDir != "" {
+		if path == homeDir {
+			return "~"
+		}
+		if strings.HasPrefix(path, homeDir+string(filepath.Separator)) {
+			return "~" + strings.TrimPrefix(path, homeDir)
+		}
+	}
+
+	return path
 }
 
 func BuildSwitchRows(candidates []SwitchCandidate) []SwitchRow {
@@ -37,7 +72,10 @@ func formatSwitchLabel(candidate SwitchCandidate) string {
 		parts = append(parts, "["+modeLabel+"]")
 	}
 
-	path := sanitizeCell(candidate.Path)
+	path := sanitizeCell(candidate.DisplayPath)
+	if path == "" {
+		path = sanitizeCell(candidate.Path)
+	}
 	if path != "" {
 		parts = append(parts, path)
 	}
@@ -49,4 +87,12 @@ func sanitizeCell(value string) string {
 	value = strings.ReplaceAll(value, "\t", " ")
 	value = strings.ReplaceAll(value, "\n", " ")
 	return strings.TrimSpace(value)
+}
+
+func cleanPrettyRoot(path string) string {
+	if strings.TrimSpace(path) == "" {
+		return ""
+	}
+
+	return filepath.Clean(path)
 }

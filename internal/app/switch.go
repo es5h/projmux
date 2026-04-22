@@ -248,7 +248,7 @@ func (c *switchCommand) candidateInputs(currentPath string) (candidates.Inputs, 
 	return candidates.Inputs{
 		HomeDir:      homeDir,
 		RepoRoot:     cleanOptionalPath(c.env(repoRootEnvVar)),
-		ManagedRoots: switchManagedRootsFromEnv(c.lookupEnv),
+		ManagedRoots: switchManagedRoots(homeDir, c.env(repoRootEnvVar), c.lookupEnv),
 		Pins:         pins,
 		CurrentPath:  currentPath,
 	}, nil
@@ -389,7 +389,7 @@ func (c *switchCommand) env(name string) string {
 	return c.lookupEnv(name)
 }
 
-func switchManagedRootsFromEnv(lookup func(string) string) []string {
+func switchManagedRoots(homeDir, repoRoot string, lookup func(string) string) []string {
 	roots := make([]string, 0)
 	seen := make(map[string]struct{})
 
@@ -408,6 +408,36 @@ func switchManagedRootsFromEnv(lookup func(string) string) []string {
 			seen[root] = struct{}{}
 			roots = append(roots, root)
 		}
+	}
+
+	if len(roots) == 0 {
+		for _, root := range defaultManagedRoots(homeDir, repoRoot) {
+			if _, ok := seen[root]; ok {
+				continue
+			}
+			seen[root] = struct{}{}
+			roots = append(roots, root)
+		}
+	}
+
+	return roots
+}
+
+func defaultManagedRoots(homeDir, repoRoot string) []string {
+	roots := make([]string, 0, 6)
+	for _, root := range []string{
+		filepath.Join(homeDir, "source"),
+		filepath.Join(homeDir, "work"),
+		filepath.Join(homeDir, "projects"),
+		filepath.Join(homeDir, "src"),
+		filepath.Join(homeDir, "code"),
+		repoRoot,
+	} {
+		root = cleanOptionalPath(root)
+		if root == "" {
+			continue
+		}
+		roots = append(roots, root)
 	}
 
 	return roots
@@ -579,6 +609,11 @@ func (c *switchCommand) renderRows(ctx context.Context, candidatePaths []string)
 	if err != nil {
 		return nil, err
 	}
+	homeDir, err := c.resolveHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	repoRoot := cleanOptionalPath(c.env(repoRootEnvVar))
 
 	for _, candidatePath := range candidatePaths {
 		sessionName, err := c.identity.SessionIdentityForPath(candidatePath)
@@ -597,6 +632,7 @@ func (c *switchCommand) renderRows(ctx context.Context, candidatePaths []string)
 
 		renderCandidates = append(renderCandidates, intrender.SwitchCandidate{
 			Path:        candidatePath,
+			DisplayPath: intrender.PrettyPath(candidatePath, homeDir, repoRoot),
 			SessionName: sessionName,
 			ModeLabel:   modeLabel,
 		})
