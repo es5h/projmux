@@ -15,6 +15,7 @@ func Run(args []string, stdout, stderr io.Writer) error {
 // App wires the CLI entrypoints to concrete command handlers.
 type App struct {
 	current  *currentCommand
+	kill     *killCommand
 	pin      *pinCommand
 	switcher *switchCommand
 }
@@ -23,6 +24,7 @@ type App struct {
 func New() *App {
 	return &App{
 		current:  newCurrentCommand(),
+		kill:     newKillCommand(),
 		pin:      newPinCommand(),
 		switcher: newSwitchCommand(),
 	}
@@ -38,6 +40,8 @@ func (a *App) Run(args []string, stdout, stderr io.Writer) error {
 	switch args[0] {
 	case "current":
 		return a.current.Run(args[1:], stdout, stderr)
+	case "kill":
+		return a.kill.Run(args[1:], stdout, stderr)
 	case "pin":
 		return a.pin.Run(args[1:], stdout, stderr)
 	case "switch":
@@ -59,6 +63,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Commands:")
 	fmt.Fprintln(w, "  current   Resolve the active tmux pane path")
+	fmt.Fprintln(w, "  kill      Terminate tagged tmux sessions")
 	fmt.Fprintln(w, "  pin       Manage pinned project directories")
 	fmt.Fprintln(w, "  switch    Inspect the ordered sessionizer candidates")
 	fmt.Fprintln(w, "  help      Show bootstrap help")
