@@ -11,6 +11,7 @@ import (
 
 	"github.com/es5h/projmux/internal/config"
 	"github.com/es5h/projmux/internal/core/candidates"
+	corepreview "github.com/es5h/projmux/internal/core/preview"
 	intfzf "github.com/es5h/projmux/internal/ui/fzf"
 )
 
@@ -501,6 +502,125 @@ func TestSwitchCommandUsesDefaultManagedRootsWhenEnvUnset(t *testing.T) {
 		"/home/tester/code",
 	}; !equalStrings(got, want) {
 		t.Fatalf("inputs.ManagedRoots = %q, want %q", got, want)
+	}
+}
+
+func TestSwitchCommandPreviewRendersExistingSessionContext(t *testing.T) {
+	t.Parallel()
+
+	fixture := newSwitchFixture(t)
+	fixture.mkdir("home/source/repos/repo-a/subdir")
+
+	store := &stubPreviewStore{
+		readSelection: corepreview.Selection{
+			SessionName: "repo-a",
+			WindowIndex: "2",
+			PaneIndex:   "1",
+		},
+		readFound: true,
+	}
+	inventory := &stubPreviewInventory{
+		windows: []corepreview.Window{
+			{Index: "1"},
+			{Index: "2", Active: true},
+		},
+		panes: []corepreview.Pane{
+			{WindowIndex: "2", Index: "0"},
+			{WindowIndex: "2", Index: "1", Active: true},
+		},
+	}
+	cmd := &switchCommand{
+		discover:     candidates.Discover,
+		pinStore:     func() (switchPinStore, error) { return stubSwitchPinStore{}, nil },
+		sessions:     &capturingSwitchSessionExecutor{exists: map[string]bool{"repo-a": true}},
+		previewStore: store,
+		inventory:    inventory,
+		identity:     stubSwitchIdentityResolver{name: "repo-a"},
+		validate:     validateDirectory,
+		homeDir:      func() (string, error) { return fixture.path("home"), nil },
+		workingDir:   func() (string, error) { return fixture.path("home/source/repos/repo-a/subdir"), nil },
+		lookupEnv: func(name string) string {
+			if name == repoRootEnvVar {
+				return fixture.path("home/source/repos")
+			}
+			return ""
+		},
+	}
+
+	var stdout bytes.Buffer
+	if err := cmd.Run([]string{"preview"}, &stdout, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	want := "" +
+		"dir: ~rp/repo-a\n" +
+		"session: repo-a\n" +
+		"state: existing\n" +
+		"selected: window=2 pane=1\n" +
+		"windows:\n" +
+		"    1\n" +
+		"  * 2\n" +
+		"panes:\n" +
+		"    0\n" +
+		"  * 1\n"
+	if got := stdout.String(); got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+	if got, want := inventory.sessionWindowsSession, "repo-a"; got != want {
+		t.Fatalf("SessionWindows session = %q, want %q", got, want)
+	}
+	if got, want := inventory.sessionPanesSession, "repo-a"; got != want {
+		t.Fatalf("SessionPanes session = %q, want %q", got, want)
+	}
+}
+
+func TestSwitchCommandPreviewRendersNewSessionContextWithoutInventory(t *testing.T) {
+	t.Parallel()
+
+	fixture := newSwitchFixture(t)
+	fixture.mkdir("home/source/repos/repo-a/subdir")
+
+	inventory := &stubPreviewInventory{}
+	cmd := &switchCommand{
+		discover:     candidates.Discover,
+		pinStore:     func() (switchPinStore, error) { return stubSwitchPinStore{}, nil },
+		sessions:     &capturingSwitchSessionExecutor{},
+		previewStore: &stubPreviewStore{},
+		inventory:    inventory,
+		identity:     stubSwitchIdentityResolver{name: "repo-a"},
+		validate:     validateDirectory,
+		homeDir:      func() (string, error) { return fixture.path("home"), nil },
+		workingDir:   func() (string, error) { return fixture.path("home/source/repos/repo-a/subdir"), nil },
+		lookupEnv: func(name string) string {
+			if name == repoRootEnvVar {
+				return fixture.path("home/source/repos")
+			}
+			return ""
+		},
+	}
+
+	var stdout bytes.Buffer
+	if err := cmd.Run([]string{"preview"}, &stdout, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	want := "" +
+		"dir: ~rp/repo-a\n" +
+		"session: repo-a\n" +
+		"state: new\n" +
+		"selected: none\n" +
+		"windows:\n" +
+		"  (none)\n" +
+		"panes:\n" +
+		"  (none)\n"
+	if got := stdout.String(); got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+	if got := inventory.sessionWindowsSession; got != "" {
+		t.Fatalf("SessionWindows session = %q, want empty", got)
+	}
+	if got := inventory.sessionPanesSession; got != "" {
+		t.Fatalf("SessionPanes session = %q, want empty", got)
 	}
 }
 

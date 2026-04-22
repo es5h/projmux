@@ -13,6 +13,7 @@ import (
 	"github.com/es5h/projmux/internal/config"
 	"github.com/es5h/projmux/internal/core/candidates"
 	"github.com/es5h/projmux/internal/core/pins"
+	corepreview "github.com/es5h/projmux/internal/core/preview"
 	coretags "github.com/es5h/projmux/internal/core/tags"
 	inttmux "github.com/es5h/projmux/internal/integrations/tmux"
 	intfzf "github.com/es5h/projmux/internal/ui/fzf"
@@ -56,18 +57,26 @@ type switchSessionInspector interface {
 	SessionExists(ctx context.Context, sessionName string) (bool, error)
 }
 
+type switchPreviewStore interface {
+	ReadSelection(sessionName string) (corepreview.Selection, bool, error)
+}
+
 type switchCommand struct {
-	discover    candidateDiscoverer
-	pinStore    switchPinStoreFactory
-	tagStore    switchTagStoreFactory
-	runner      switchRunner
-	sessions    switchSessionExecutor
-	identity    sessionIdentityResolver
-	identityErr error
-	validate    func(path string) error
-	homeDir     func() (string, error)
-	workingDir  func() (string, error)
-	lookupEnv   func(string) string
+	discover        candidateDiscoverer
+	pinStore        switchPinStoreFactory
+	tagStore        switchTagStoreFactory
+	runner          switchRunner
+	sessions        switchSessionExecutor
+	previewStore    switchPreviewStore
+	previewStoreErr error
+	inventory       previewInventory
+	inventoryErr    error
+	identity        sessionIdentityResolver
+	identityErr     error
+	validate        func(path string) error
+	homeDir         func() (string, error)
+	workingDir      func() (string, error)
+	lookupEnv       func(string) string
 }
 
 type switchPlan struct {
@@ -82,13 +91,15 @@ type switchPlan struct {
 func newSwitchCommand() *switchCommand {
 	client := inttmux.NewClient(inttmux.ExecRunner{})
 	identity, err := newDefaultCurrentIdentityResolver()
+	paths, pathsErr := config.DefaultPathsFromEnv()
 
-	return &switchCommand{
+	cmd := &switchCommand{
 		discover:    candidates.Discover,
 		pinStore:    newDefaultSwitchPinStore,
 		tagStore:    newDefaultSwitchTagStore,
 		runner:      intfzf.NewRunner(),
 		sessions:    client,
+		inventory:   tmuxPreviewInventory{client: client},
 		identity:    identity,
 		identityErr: err,
 		validate:    validateDirectory,
@@ -96,6 +107,12 @@ func newSwitchCommand() *switchCommand {
 		workingDir:  os.Getwd,
 		lookupEnv:   os.Getenv,
 	}
+	if pathsErr != nil {
+		cmd.previewStoreErr = fmt.Errorf("resolve default config paths: %w", pathsErr)
+		return cmd
+	}
+	cmd.previewStore = corepreview.NewDefaultStore(paths)
+	return cmd
 }
 
 func newDefaultSwitchPinStore() (switchPinStore, error) {
@@ -124,6 +141,8 @@ func (c *switchCommand) Run(args []string, stdout, stderr io.Writer) error {
 		switch args[0] {
 		case "toggle-tag":
 			return c.runToggleTag(args[1:], stdout, stderr)
+		case "preview":
+			return c.runPreview(args[1:], stdout, stderr)
 		}
 	}
 
@@ -198,6 +217,39 @@ func (c *switchCommand) runToggleTag(args []string, stdout, stderr io.Writer) er
 	}
 
 	return c.toggleTag(target, stdout)
+}
+
+func (c *switchCommand) runPreview(args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("switch preview", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.Usage = func() {
+		printSwitchUsage(stderr)
+	}
+
+	if err := fs.Parse(args); err != nil {
+		printSwitchUsage(stderr)
+		return err
+	}
+	if fs.NArg() > 1 {
+		printSwitchUsage(stderr)
+		return fmt.Errorf("switch preview accepts at most 1 [path] argument")
+	}
+
+	target, err := c.resolveSwitchTarget(fs.Args(), "switch preview")
+	if err != nil {
+		if strings.Contains(err.Error(), "switch preview requires") {
+			printSwitchUsage(stderr)
+		}
+		return err
+	}
+
+	model, err := c.previewModel(context.Background(), target)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.WriteString(stdout, intrender.RenderSwitchPreview(model))
+	return err
 }
 
 func (c *switchCommand) planFromInputs(ui string, inputs candidates.Inputs) (switchPlan, error) {
@@ -301,8 +353,8 @@ func (c *switchCommand) resolveWorkingDir() (string, error) {
 	return filepath.Clean(path), nil
 }
 
-func (c *switchCommand) resolveToggleTagTarget(args []string) (string, error) {
-	inputPath, err := c.resolveToggleTagInput(args)
+func (c *switchCommand) resolveSwitchTarget(args []string, command string) (string, error) {
+	inputPath, err := c.resolveSwitchInput(args, command)
 	if err != nil {
 		return "", err
 	}
@@ -328,7 +380,11 @@ func (c *switchCommand) resolveToggleTagTarget(args []string) (string, error) {
 	return target, nil
 }
 
-func (c *switchCommand) resolveToggleTagInput(args []string) (string, error) {
+func (c *switchCommand) resolveToggleTagTarget(args []string) (string, error) {
+	return c.resolveSwitchTarget(args, "switch toggle-tag")
+}
+
+func (c *switchCommand) resolveSwitchInput(args []string, command string) (string, error) {
 	var path string
 
 	switch len(args) {
@@ -340,11 +396,11 @@ func (c *switchCommand) resolveToggleTagInput(args []string) (string, error) {
 		}
 	case 1:
 		if strings.TrimSpace(args[0]) == "" {
-			return "", errors.New("switch toggle-tag requires a non-empty [path] argument")
+			return "", fmt.Errorf("%s requires a non-empty [path] argument", command)
 		}
 		path = args[0]
 	default:
-		return "", fmt.Errorf("switch toggle-tag accepts at most 1 [path] argument")
+		return "", fmt.Errorf("%s accepts at most 1 [path] argument", command)
 	}
 
 	if !filepath.IsAbs(path) {
@@ -364,6 +420,102 @@ func (c *switchCommand) resolveToggleTagInput(args []string) (string, error) {
 	}
 
 	return path, nil
+}
+
+func (c *switchCommand) previewModel(ctx context.Context, target string) (corepreview.SwitchReadModel, error) {
+	homeDir, err := c.resolveHomeDir()
+	if err != nil {
+		return corepreview.SwitchReadModel{}, err
+	}
+	repoRoot := cleanOptionalPath(c.env(repoRootEnvVar))
+
+	if c.identityErr != nil {
+		return corepreview.SwitchReadModel{}, fmt.Errorf("configure session identity resolver: %w", c.identityErr)
+	}
+	if c.identity == nil {
+		return corepreview.SwitchReadModel{}, fmt.Errorf("switch session identity resolver is not configured")
+	}
+
+	sessionName, err := c.identity.SessionIdentityForPath(target)
+	if err != nil {
+		return corepreview.SwitchReadModel{}, fmt.Errorf("resolve switch preview session identity: %w", err)
+	}
+
+	modelInputs := corepreview.SwitchReadModelInputs{
+		Path:        target,
+		DisplayPath: intrender.PrettyPath(target, homeDir, repoRoot),
+		SessionName: sessionName,
+	}
+
+	exists, err := c.switchSessionExists(ctx, sessionName)
+	if err != nil {
+		return corepreview.SwitchReadModel{}, err
+	}
+	modelInputs.SessionExists = exists
+	if !exists {
+		return corepreview.BuildSwitchReadModel(modelInputs), nil
+	}
+
+	store, err := c.requireSwitchPreviewStore()
+	if err != nil {
+		return corepreview.SwitchReadModel{}, err
+	}
+	inventory, err := c.requireSwitchPreviewInventory()
+	if err != nil {
+		return corepreview.SwitchReadModel{}, err
+	}
+
+	selection, hasSelection, err := store.ReadSelection(sessionName)
+	if err != nil {
+		return corepreview.SwitchReadModel{}, fmt.Errorf("load switch preview selection for %q: %w", sessionName, err)
+	}
+	windows, err := inventory.SessionWindows(ctx, sessionName)
+	if err != nil {
+		return corepreview.SwitchReadModel{}, fmt.Errorf("load switch preview windows for %q: %w", sessionName, err)
+	}
+	panes, err := inventory.SessionPanes(ctx, sessionName)
+	if err != nil {
+		return corepreview.SwitchReadModel{}, fmt.Errorf("load switch preview panes for %q: %w", sessionName, err)
+	}
+
+	modelInputs.StoredSelection = selection
+	modelInputs.HasStoredSelection = hasSelection
+	modelInputs.Windows = windows
+	modelInputs.Panes = panes
+	return corepreview.BuildSwitchReadModel(modelInputs), nil
+}
+
+func (c *switchCommand) switchSessionExists(ctx context.Context, sessionName string) (bool, error) {
+	inspector, ok := c.sessions.(switchSessionInspector)
+	if !ok || inspector == nil {
+		return false, nil
+	}
+
+	exists, err := inspector.SessionExists(ctx, sessionName)
+	if err != nil {
+		return false, fmt.Errorf("check existing switch session %q: %w", sessionName, err)
+	}
+	return exists, nil
+}
+
+func (c *switchCommand) requireSwitchPreviewStore() (switchPreviewStore, error) {
+	if c.previewStoreErr != nil {
+		return nil, fmt.Errorf("configure switch preview store: %w", c.previewStoreErr)
+	}
+	if c.previewStore == nil {
+		return nil, errors.New("configure switch preview store: switch preview store is not configured")
+	}
+	return c.previewStore, nil
+}
+
+func (c *switchCommand) requireSwitchPreviewInventory() (previewInventory, error) {
+	if c.inventoryErr != nil {
+		return nil, fmt.Errorf("configure switch preview inventory: %w", c.inventoryErr)
+	}
+	if c.inventory == nil {
+		return nil, errors.New("configure switch preview inventory: switch preview inventory is not configured")
+	}
+	return c.inventory, nil
 }
 
 func (c *switchCommand) loadTagStore() (switchTagStore, error) {
@@ -680,6 +832,7 @@ func printSwitchUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  projmux switch [--ui=popup|sidebar]")
 	fmt.Fprintln(w, "  projmux switch toggle-tag [path]")
+	fmt.Fprintln(w, "  projmux switch preview [path]")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Options:")
 	fmt.Fprintln(w, "  --ui string   Candidate surface to prepare (popup or sidebar) (default \"popup\")")
