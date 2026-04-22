@@ -15,12 +15,14 @@ func Run(args []string, stdout, stderr io.Writer) error {
 // App wires the CLI entrypoints to concrete command handlers.
 type App struct {
 	current *currentCommand
+	pin     *pinCommand
 }
 
 // New builds the default application graph.
 func New() *App {
 	return &App{
 		current: newCurrentCommand(),
+		pin:     newPinCommand(),
 	}
 }
 
@@ -34,6 +36,8 @@ func (a *App) Run(args []string, stdout, stderr io.Writer) error {
 	switch args[0] {
 	case "current":
 		return a.current.Run(args[1:], stdout, stderr)
+	case "pin":
+		return a.pin.Run(args[1:], stdout, stderr)
 	case "version", "--version", "-version":
 		_, err := fmt.Fprintf(stdout, "projmux %s\n", version.String())
 		return err
@@ -51,6 +55,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Commands:")
 	fmt.Fprintln(w, "  current   Resolve the active tmux pane path")
+	fmt.Fprintln(w, "  pin       Manage pinned project directories")
 	fmt.Fprintln(w, "  help      Show bootstrap help")
 	fmt.Fprintln(w, "  version   Print the current version")
 }
