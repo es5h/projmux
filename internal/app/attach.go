@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/es5h/projmux/internal/core/lifecycle"
 	coresessions "github.com/es5h/projmux/internal/core/sessions"
@@ -20,6 +21,7 @@ type attachInventoryResolver interface {
 
 type attachSessionManager interface {
 	EnsureSession(ctx context.Context, sessionName, cwd string) error
+	CreateEphemeralSession(ctx context.Context, sessionName, cwd string) error
 	OpenSession(ctx context.Context, sessionName string) error
 }
 
@@ -28,19 +30,23 @@ type attachSessionKiller interface {
 }
 
 type attachCommand struct {
-	inventory attachInventoryResolver
-	sessions  attachSessionManager
-	killer    attachSessionKiller
-	homeDir   func() (string, error)
+	inventory  attachInventoryResolver
+	sessions   attachSessionManager
+	killer     attachSessionKiller
+	homeDir    func() (string, error)
+	workingDir func() (string, error)
+	now        func() time.Time
 }
 
 func newAttachCommand() *attachCommand {
 	client := inttmux.NewClient(inttmux.ExecRunner{})
 	return &attachCommand{
-		inventory: client,
-		sessions:  client,
-		killer:    client,
-		homeDir:   os.UserHomeDir,
+		inventory:  client,
+		sessions:   client,
+		killer:     client,
+		homeDir:    os.UserHomeDir,
+		workingDir: os.Getwd,
+		now:        time.Now,
 	}
 }
 
@@ -72,6 +78,7 @@ func (c *attachCommand) runAuto(args []string, _ io.Writer, stderr io.Writer) er
 	fs := flag.NewFlagSet("attach auto", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	keepCount := fs.Int("keep", 3, "number of unattached ephemeral sessions to retain")
+	fallback := fs.String("fallback", "home", "fallback session policy: home or ephemeral")
 
 	if err := fs.Parse(args); err != nil {
 		printAttachUsage(stderr)
@@ -80,6 +87,10 @@ func (c *attachCommand) runAuto(args []string, _ io.Writer, stderr io.Writer) er
 	if fs.NArg() != 0 {
 		printAttachUsage(stderr)
 		return fmt.Errorf("attach auto does not accept positional arguments")
+	}
+	if *fallback != "home" && *fallback != "ephemeral" {
+		printAttachUsage(stderr)
+		return fmt.Errorf("attach auto fallback must be one of: home, ephemeral")
 	}
 
 	homeDir, err := c.resolveHomeDir()
@@ -115,7 +126,22 @@ func (c *attachCommand) runAuto(args []string, _ io.Writer, stderr io.Writer) er
 		if c.sessions == nil {
 			return fmt.Errorf("ensure auto-attach home session: session manager is not configured")
 		}
-		if err := c.sessions.EnsureSession(context.Background(), plan.AttachTarget, homeDir); err != nil {
+
+		if *fallback == "ephemeral" {
+			cwd, err := c.resolveWorkingDir()
+			if err != nil {
+				return err
+			}
+			if c.now == nil {
+				return fmt.Errorf("resolve auto-attach ephemeral clock: clock is not configured")
+			}
+
+			sessionName := lifecycle.EphemeralSessionName(cwd, c.now())
+			if err := c.sessions.CreateEphemeralSession(context.Background(), sessionName, cwd); err != nil {
+				return fmt.Errorf("create auto-attach ephemeral session %q: %w", sessionName, err)
+			}
+			plan.AttachTarget = sessionName
+		} else if err := c.sessions.EnsureSession(context.Background(), plan.AttachTarget, homeDir); err != nil {
 			return fmt.Errorf("ensure auto-attach home session %q: %w", plan.AttachTarget, err)
 		}
 	}
@@ -156,7 +182,20 @@ func (c *attachCommand) resolveInventory(ctx context.Context) ([]lifecycle.Sessi
 	return sessions, nil
 }
 
+func (c *attachCommand) resolveWorkingDir() (string, error) {
+	if c.workingDir == nil {
+		return "", fmt.Errorf("resolve auto-attach working directory: working directory resolver is not configured")
+	}
+
+	cwd, err := c.workingDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve auto-attach working directory: %w", err)
+	}
+
+	return filepath.Clean(cwd), nil
+}
+
 func printAttachUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  projmux attach auto [--keep=N]")
+	fmt.Fprintln(w, "  projmux attach auto [--keep=N] [--fallback=home|ephemeral]")
 }
