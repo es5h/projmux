@@ -36,6 +36,7 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 				return intfzf.Result{Value: "/home/tester/dotfiles"}, nil
 			}),
 			sessions:   executor,
+			executable: func() (string, error) { return "/tmp/projmux", nil },
 			identity:   stubSwitchIdentityResolver{name: "dotfiles"},
 			validate:   func(string) error { return nil },
 			homeDir:    func() (string, error) { return "/home/tester", nil },
@@ -88,6 +89,12 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 	if got, want := gotRunnerOptions.ExpectKeys, []string{switchTagExpectKey}; !equalStrings(got, want) {
 		t.Fatalf("runner expect keys = %q, want %q", got, want)
 	}
+	if got, want := gotRunnerOptions.PreviewCommand, "exec '/tmp/projmux' 'switch' 'preview' {2}"; got != want {
+		t.Fatalf("runner preview command = %q, want %q", got, want)
+	}
+	if got, want := gotRunnerOptions.PreviewWindow, "down,35%,border-top"; got != want {
+		t.Fatalf("runner preview window = %q, want %q", got, want)
+	}
 	if got, want := gotRunnerOptions.Candidates, []string{"/home/tester", "/home/tester/dotfiles"}; !equalStrings(got, want) {
 		t.Fatalf("runner candidates = %q, want %q", got, want)
 	}
@@ -122,6 +129,7 @@ func TestSwitchCommandSupportsSidebarUI(t *testing.T) {
 			return intfzf.Result{Value: "/tmp/app"}, nil
 		}),
 		sessions:   &capturingSwitchSessionExecutor{},
+		executable: func() (string, error) { return "/tmp/projmux", nil },
 		identity:   stubSwitchIdentityResolver{name: "tmp-app"},
 		validate:   func(string) error { return nil },
 		homeDir:    func() (string, error) { return "/home/tester", nil },
@@ -137,6 +145,12 @@ func TestSwitchCommandSupportsSidebarUI(t *testing.T) {
 	}
 	if got, want := gotRunnerOptions.UI, switchUISidebar; got != want {
 		t.Fatalf("runner UI = %q, want %q", got, want)
+	}
+	if got, want := gotRunnerOptions.PreviewCommand, "exec '/tmp/projmux' 'switch' 'preview' {2}"; got != want {
+		t.Fatalf("runner preview command = %q, want %q", got, want)
+	}
+	if got, want := gotRunnerOptions.PreviewWindow, "right,60%,border-left"; got != want {
+		t.Fatalf("runner preview window = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Entries, []intfzf.Entry{
 		{Label: "tmp-app  [new]  /tmp/app", Value: "/tmp/app"},
@@ -214,6 +228,7 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 	fakeExecutor := &capturingSwitchSessionExecutor{}
 	cmd.runner = fakeRunner
 	cmd.sessions = fakeExecutor
+	cmd.executable = func() (string, error) { return "/tmp/projmux", nil }
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -248,6 +263,12 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 	}
 	if got := fakeRunner.last.Entries; !equalEntries(got, wantEntries) {
 		t.Fatalf("runner entries = %#v, want %#v", got, wantEntries)
+	}
+	if got, want := fakeRunner.last.PreviewCommand, "exec '/tmp/projmux' 'switch' 'preview' {2}"; got != want {
+		t.Fatalf("runner preview command = %q, want %q", got, want)
+	}
+	if got, want := fakeRunner.last.PreviewWindow, "right,60%,border-left"; got != want {
+		t.Fatalf("runner preview window = %q, want %q", got, want)
 	}
 	if got, want := fakeRunner.last.UI, switchUISidebar; got != want {
 		t.Fatalf("runner UI = %q, want %q", got, want)

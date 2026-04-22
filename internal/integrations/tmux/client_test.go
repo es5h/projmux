@@ -1052,6 +1052,28 @@ func TestBuildPopupSwitchCommandRequiresInputs(t *testing.T) {
 	}
 }
 
+func TestBuildSwitchPreviewCommandQuotesBinaryPath(t *testing.T) {
+	t.Parallel()
+
+	command, err := BuildSwitchPreviewCommand("/tmp/projmux's bin")
+	if err != nil {
+		t.Fatalf("BuildSwitchPreviewCommand returned error: %v", err)
+	}
+
+	const want = "exec '/tmp/projmux'\\''s bin' 'switch' 'preview' {2}"
+	if command != want {
+		t.Fatalf("command = %q, want %q", command, want)
+	}
+}
+
+func TestBuildSwitchPreviewCommandRequiresBinaryPath(t *testing.T) {
+	t.Parallel()
+
+	if _, err := BuildSwitchPreviewCommand(" "); err == nil || !strings.Contains(err.Error(), "binary path is required") {
+		t.Fatalf("unexpected error for binary path: %v", err)
+	}
+}
+
 func TestClientEnsureSessionRequiresCWD(t *testing.T) {
 	t.Parallel()
 

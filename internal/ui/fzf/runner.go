@@ -11,10 +11,13 @@ import (
 const binaryName = "fzf"
 
 type Options struct {
-	UI         string
-	Candidates []string
-	Entries    []Entry
-	ExpectKeys []string
+	UI             string
+	Candidates     []string
+	Entries        []Entry
+	ExpectKeys     []string
+	PreviewCommand string
+	PreviewWindow  string
+	Bindings       []string
 }
 
 type Entry struct {
@@ -65,7 +68,7 @@ func (r *runner) Run(options Options) (Result, error) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	cmd := r.newCommand(path, runnerArgs(options.UI, options.ExpectKeys)...)
+	cmd := r.newCommand(path, runnerArgs(options)...)
 	cmd.SetStdin(strings.NewReader(strings.Join(renderedEntries(options), "\n")))
 	cmd.SetStdout(&stdout)
 	cmd.SetStderr(&stderr)
@@ -80,10 +83,24 @@ func (r *runner) Run(options Options) (Result, error) {
 	return selectedResult(trimTrailingNewlines(stdout.String()), len(options.ExpectKeys) != 0), nil
 }
 
-func runnerArgs(ui string, expectKeys []string) []string {
+func runnerArgs(options Options) []string {
+	ui := options.UI
 	args := []string{"--prompt", fmt.Sprintf("projmux %s> ", ui), "--delimiter", "\t", "--with-nth", "1"}
-	if len(expectKeys) != 0 {
-		args = append(args, "--expect", strings.Join(expectKeys, ","))
+	if len(options.ExpectKeys) != 0 {
+		args = append(args, "--expect", strings.Join(options.ExpectKeys, ","))
+	}
+	if previewCommand := strings.TrimSpace(options.PreviewCommand); previewCommand != "" {
+		args = append(args, "--preview", previewCommand)
+		if previewWindow := strings.TrimSpace(options.PreviewWindow); previewWindow != "" {
+			args = append(args, "--preview-window", previewWindow)
+		}
+	}
+	for _, binding := range options.Bindings {
+		binding = strings.TrimSpace(binding)
+		if binding == "" {
+			continue
+		}
+		args = append(args, "--bind", binding)
 	}
 	return args
 }

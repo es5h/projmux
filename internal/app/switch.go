@@ -71,6 +71,7 @@ type switchCommand struct {
 	previewStoreErr error
 	inventory       previewInventory
 	inventoryErr    error
+	executable      func() (string, error)
 	identity        sessionIdentityResolver
 	identityErr     error
 	validate        func(path string) error
@@ -100,6 +101,7 @@ func newSwitchCommand() *switchCommand {
 		runner:      intfzf.NewRunner(),
 		sessions:    client,
 		inventory:   tmuxPreviewInventory{client: client},
+		executable:  os.Executable,
 		identity:    identity,
 		identityErr: err,
 		validate:    validateDirectory,
@@ -719,17 +721,53 @@ func (c *switchCommand) runPicker(plan switchPlan) (intfzf.Result, error) {
 		return intfzf.Result{}, fmt.Errorf("switch runner is not configured")
 	}
 
-	result, err := c.runner.Run(intfzf.Options{
+	options := intfzf.Options{
 		UI:         plan.UI,
 		Candidates: plan.Candidates,
 		Entries:    plan.Rows,
 		ExpectKeys: []string{switchTagExpectKey},
-	})
+	}
+	if previewCommand, err := c.switchPreviewCommand(); err != nil {
+		return intfzf.Result{}, err
+	} else if previewCommand != "" {
+		options.PreviewCommand = previewCommand
+		options.PreviewWindow = switchPreviewWindow(plan.UI)
+	}
+
+	result, err := c.runner.Run(options)
 	if err != nil {
 		return intfzf.Result{}, fmt.Errorf("run switch picker: %w", err)
 	}
 
 	return result, nil
+}
+
+func (c *switchCommand) switchPreviewCommand() (string, error) {
+	if c.executable == nil {
+		return "", nil
+	}
+
+	binaryPath, err := c.executable()
+	if err != nil {
+		return "", fmt.Errorf("resolve switch preview executable: %w", err)
+	}
+
+	command, err := inttmux.BuildSwitchPreviewCommand(binaryPath)
+	if err != nil {
+		return "", fmt.Errorf("build switch preview command: %w", err)
+	}
+	return command, nil
+}
+
+func switchPreviewWindow(ui string) string {
+	switch ui {
+	case switchUISidebar:
+		return "right,60%,border-left"
+	case switchUIPopup:
+		return "down,35%,border-top"
+	default:
+		return ""
+	}
 }
 
 func (c *switchCommand) toggleTag(target string, stdout io.Writer) error {

@@ -511,6 +511,17 @@ func BuildPopupSwitchCommand(binaryPath, cwd string) (string, error) {
 	return "cd -- " + shellQuote(cwd) + " && " + buildExecCommand(binaryPath, "switch", "--ui=popup"), nil
 }
 
+// BuildSwitchPreviewCommand builds the shell command used by fzf preview panes
+// for the existing `projmux switch preview {2}` flow.
+func BuildSwitchPreviewCommand(binaryPath string) (string, error) {
+	binaryPath = strings.TrimSpace(binaryPath)
+	if binaryPath == "" {
+		return "", errors.New("switch preview binary path is required")
+	}
+
+	return buildExecCommand(binaryPath, "switch", "preview") + " {2}", nil
+}
+
 func buildExecCommand(binaryPath string, args ...string) string {
 	quoted := make([]string, 0, len(args)+2)
 	quoted = append(quoted, "exec", shellQuote(binaryPath))

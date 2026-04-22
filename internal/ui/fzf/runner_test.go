@@ -147,6 +147,40 @@ func TestRunnerRunReportsExecutionFailure(t *testing.T) {
 	}
 }
 
+func TestRunnerRunIncludesPreviewAndBindings(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCommand{}
+	r := &runner{
+		lookupPath: func(string) (string, error) { return "/usr/bin/fzf", nil },
+		newCommand: func(name string, args ...string) command {
+			want := []string{
+				"--prompt", "projmux sidebar> ",
+				"--delimiter", "\t",
+				"--with-nth", "1",
+				"--preview", "exec '/tmp/projmux' 'switch' 'preview' {2}",
+				"--preview-window", "right,60%,border-left",
+				"--bind", "ctrl-r:reload(sync)",
+			}
+			if got := args; !equalStrings(got, want) {
+				t.Fatalf("command args = %q, want %q", got, want)
+			}
+			return fake
+		},
+	}
+
+	_, err := r.Run(Options{
+		UI:             "sidebar",
+		Candidates:     []string{"/tmp/project-a"},
+		PreviewCommand: "exec '/tmp/projmux' 'switch' 'preview' {2}",
+		PreviewWindow:  "right,60%,border-left",
+		Bindings:       []string{"ctrl-r:reload(sync)"},
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+}
+
 type fakeCommand struct {
 	stdin  bytes.Buffer
 	stdout string
