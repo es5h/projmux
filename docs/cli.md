@@ -19,7 +19,7 @@
 - `projmux kill <session>`
 - `projmux kill tagged`
 - `projmux prune ephemeral`
-- `projmux attach auto`
+- `projmux attach auto [--keep=N] [--fallback=home|ephemeral]`
 
 ### Pins and config
 - `projmux pin add <dir>`

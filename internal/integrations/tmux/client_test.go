@@ -526,6 +526,48 @@ func TestClientEnsureSessionSkipsCreateWhenSessionExists(t *testing.T) {
 	}
 }
 
+func TestClientCreateEphemeralSessionCreatesAndMarksSession(t *testing.T) {
+	t.Parallel()
+
+	runner := &scriptedRunner{
+		t: t,
+		steps: []scriptedStep{
+			{},
+			{},
+		},
+	}
+	client := NewClient(runner)
+
+	if err := client.CreateEphemeralSession(context.Background(), "scratch-20260423-123456", "/tmp/projmux"); err != nil {
+		t.Fatalf("CreateEphemeralSession() error = %v", err)
+	}
+
+	wantCalls := []commandCall{
+		{name: "tmux", args: []string{"new-session", "-d", "-s", "scratch-20260423-123456", "-c", "/tmp/projmux"}},
+		{name: "tmux", args: []string{"set-option", "-t", "scratch-20260423-123456", "-q", "@dotfiles_ephemeral", "1"}},
+	}
+	if !reflect.DeepEqual(runner.calls, wantCalls) {
+		t.Fatalf("CreateEphemeralSession() calls = %#v, want %#v", runner.calls, wantCalls)
+	}
+}
+
+func TestClientCreateEphemeralSessionIgnoresMarkerFailure(t *testing.T) {
+	t.Parallel()
+
+	runner := &scriptedRunner{
+		t: t,
+		steps: []scriptedStep{
+			{},
+			{err: errors.New("set-option failed")},
+		},
+	}
+	client := NewClient(runner)
+
+	if err := client.CreateEphemeralSession(context.Background(), "scratch", "/tmp/projmux"); err != nil {
+		t.Fatalf("CreateEphemeralSession() error = %v", err)
+	}
+}
+
 func TestClientEnsureSessionWrapsLookupError(t *testing.T) {
 	t.Parallel()
 

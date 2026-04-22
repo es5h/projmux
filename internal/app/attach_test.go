@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/es5h/projmux/internal/core/lifecycle"
 )
@@ -56,10 +57,11 @@ func TestAppRunAttachAutoPrunesAndEnsuresHome(t *testing.T) {
 	}
 	app := &App{
 		attach: &attachCommand{
-			inventory: client,
-			sessions:  client,
-			killer:    client,
-			homeDir:   func() (string, error) { return "/home/tester", nil },
+			inventory:  client,
+			sessions:   client,
+			killer:     client,
+			homeDir:    func() (string, error) { return "/home/tester", nil },
+			workingDir: func() (string, error) { return "/tmp/current", nil },
 		},
 	}
 
@@ -76,6 +78,43 @@ func TestAppRunAttachAutoPrunesAndEnsuresHome(t *testing.T) {
 	}
 	if client.killed != nil {
 		t.Fatalf("KillSession calls = %#v, want none", client.killed)
+	}
+}
+
+func TestAppRunAttachAutoCreatesEphemeralFallback(t *testing.T) {
+	t.Parallel()
+
+	client := &recordingAttachClient{
+		inventory: []lifecycle.SessionInventory{
+			{Name: "busy", Ephemeral: true, Attached: true, LastAttached: 30},
+		},
+	}
+	app := &App{
+		attach: &attachCommand{
+			inventory:  client,
+			sessions:   client,
+			killer:     client,
+			homeDir:    func() (string, error) { return "/home/tester", nil },
+			workingDir: func() (string, error) { return "/work/hello world", nil },
+			now: func() time.Time {
+				return time.Date(2026, time.April, 23, 12, 34, 56, 0, time.UTC)
+			},
+		},
+	}
+
+	if err := app.Run([]string{"attach", "auto", "--fallback=ephemeral"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if client.ensured != nil {
+		t.Fatalf("EnsureSession calls = %#v, want none", client.ensured)
+	}
+	wantCreated := []ensuredSession{{name: "hello-world-20260423-123456", cwd: "/work/hello world"}}
+	if !reflect.DeepEqual(client.created, wantCreated) {
+		t.Fatalf("CreateEphemeralSession calls = %#v, want %#v", client.created, wantCreated)
+	}
+	if got, want := client.opened, []string{"hello-world-20260423-123456"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("OpenSession calls = %#v, want %#v", got, want)
 	}
 }
 
@@ -104,6 +143,12 @@ func TestAttachCommandRejectsInvalidUsage(t *testing.T) {
 			name:      "positional arguments",
 			args:      []string{"auto", "extra"},
 			want:      "attach auto does not accept positional arguments",
+			wantUsage: true,
+		},
+		{
+			name:      "invalid fallback",
+			args:      []string{"auto", "--fallback=sideways"},
+			want:      "attach auto fallback must be one of: home, ephemeral",
 			wantUsage: true,
 		},
 	}
@@ -138,10 +183,12 @@ func TestAttachCommandPropagatesSetupErrors(t *testing.T) {
 		{
 			name: "home resolver",
 			cmd: &attachCommand{
-				inventory: &recordingAttachClient{},
-				sessions:  &recordingAttachClient{},
-				killer:    &recordingAttachClient{},
-				homeDir:   func() (string, error) { return "", errors.New("no home") },
+				inventory:  &recordingAttachClient{},
+				sessions:   &recordingAttachClient{},
+				killer:     &recordingAttachClient{},
+				homeDir:    func() (string, error) { return "", errors.New("no home") },
+				workingDir: func() (string, error) { return "/tmp", nil },
+				now:        time.Now,
 			},
 			want: "resolve auto-attach home directory",
 		},
@@ -151,9 +198,11 @@ func TestAttachCommandPropagatesSetupErrors(t *testing.T) {
 				inventory: attachInventoryResolverFunc(func(context.Context) ([]lifecycle.SessionInventory, error) {
 					return nil, errors.New("tmux exploded")
 				}),
-				sessions: &recordingAttachClient{},
-				killer:   &recordingAttachClient{},
-				homeDir:  func() (string, error) { return "/home/tester", nil },
+				sessions:   &recordingAttachClient{},
+				killer:     &recordingAttachClient{},
+				homeDir:    func() (string, error) { return "/home/tester", nil },
+				workingDir: func() (string, error) { return "/tmp", nil },
+				now:        time.Now,
 			},
 			want: "resolve auto-attach inventory",
 		},
@@ -163,8 +212,10 @@ func TestAttachCommandPropagatesSetupErrors(t *testing.T) {
 				inventory: attachInventoryResolverFunc(func(context.Context) ([]lifecycle.SessionInventory, error) {
 					return nil, nil
 				}),
-				killer:  &recordingAttachClient{},
-				homeDir: func() (string, error) { return "/home/tester", nil },
+				killer:     &recordingAttachClient{},
+				homeDir:    func() (string, error) { return "/home/tester", nil },
+				workingDir: func() (string, error) { return "/tmp", nil },
+				now:        time.Now,
 			},
 			want: "ensure auto-attach home session",
 		},
@@ -174,10 +225,44 @@ func TestAttachCommandPropagatesSetupErrors(t *testing.T) {
 				inventory: attachInventoryResolverFunc(func(context.Context) ([]lifecycle.SessionInventory, error) {
 					return []lifecycle.SessionInventory{{Name: "ephemeral", Ephemeral: true, LastAttached: 10}}, nil
 				}),
-				killer:  &recordingAttachClient{},
-				homeDir: func() (string, error) { return "/home/tester", nil },
+				killer:     &recordingAttachClient{},
+				homeDir:    func() (string, error) { return "/home/tester", nil },
+				workingDir: func() (string, error) { return "/tmp", nil },
+				now:        time.Now,
 			},
 			want: "open auto-attach target",
+		},
+		{
+			name: "ephemeral cwd",
+			cmd: &attachCommand{
+				inventory: attachInventoryResolverFunc(func(context.Context) ([]lifecycle.SessionInventory, error) {
+					return nil, nil
+				}),
+				sessions: &recordingAttachClient{},
+				killer:   &recordingAttachClient{},
+				homeDir:  func() (string, error) { return "/home/tester", nil },
+				workingDir: func() (string, error) {
+					return "", errors.New("no cwd")
+				},
+				now: time.Now,
+			},
+			want: "resolve auto-attach working directory",
+		},
+		{
+			name: "ephemeral create",
+			cmd: &attachCommand{
+				inventory: attachInventoryResolverFunc(func(context.Context) ([]lifecycle.SessionInventory, error) {
+					return nil, nil
+				}),
+				sessions: &recordingAttachClient{createErr: errors.New("create failed")},
+				killer:   &recordingAttachClient{},
+				homeDir:  func() (string, error) { return "/home/tester", nil },
+				workingDir: func() (string, error) {
+					return "/tmp/work", nil
+				},
+				now: time.Now,
+			},
+			want: "create auto-attach ephemeral session",
 		},
 	}
 
@@ -185,7 +270,12 @@ func TestAttachCommandPropagatesSetupErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := tt.cmd.Run([]string{"auto", "--keep=0"}, &bytes.Buffer{}, &bytes.Buffer{})
+			args := []string{"auto", "--keep=0"}
+			if strings.Contains(tt.name, "ephemeral") {
+				args = append(args, "--fallback=ephemeral")
+			}
+
+			err := tt.cmd.Run(args, &bytes.Buffer{}, &bytes.Buffer{})
 			if err == nil {
 				t.Fatal("expected error")
 			}
@@ -204,8 +294,10 @@ type ensuredSession struct {
 type recordingAttachClient struct {
 	inventory []lifecycle.SessionInventory
 	ensured   []ensuredSession
+	created   []ensuredSession
 	opened    []string
 	killed    []string
+	createErr error
 }
 
 func (c *recordingAttachClient) ListEphemeralSessions(context.Context) ([]lifecycle.SessionInventory, error) {
@@ -214,6 +306,14 @@ func (c *recordingAttachClient) ListEphemeralSessions(context.Context) ([]lifecy
 
 func (c *recordingAttachClient) EnsureSession(_ context.Context, sessionName, cwd string) error {
 	c.ensured = append(c.ensured, ensuredSession{name: sessionName, cwd: cwd})
+	return nil
+}
+
+func (c *recordingAttachClient) CreateEphemeralSession(_ context.Context, sessionName, cwd string) error {
+	if c.createErr != nil {
+		return c.createErr
+	}
+	c.created = append(c.created, ensuredSession{name: sessionName, cwd: cwd})
 	return nil
 }
 

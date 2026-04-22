@@ -239,6 +239,26 @@ func (c *Client) EnsureSession(ctx context.Context, sessionName, cwd string) err
 	return nil
 }
 
+// CreateEphemeralSession creates a detached tmux session and marks it as a
+// dotfiles-compatible ephemeral session.
+func (c *Client) CreateEphemeralSession(ctx context.Context, sessionName, cwd string) error {
+	if strings.TrimSpace(sessionName) == "" {
+		return errSessionNameRequired
+	}
+	if strings.TrimSpace(cwd) == "" {
+		return errSessionCWDRequired
+	}
+
+	if _, err := c.runner.Run(ctx, "tmux", "new-session", "-d", "-s", sessionName, "-c", cwd); err != nil {
+		return fmt.Errorf("create tmux ephemeral session %q: %w", sessionName, err)
+	}
+	if _, err := c.runner.Run(ctx, "tmux", "set-option", "-t", sessionName, "-q", "@dotfiles_ephemeral", "1"); err != nil {
+		return nil
+	}
+
+	return nil
+}
+
 // SessionExists reports whether the named tmux session already exists.
 func (c *Client) SessionExists(ctx context.Context, sessionName string) (bool, error) {
 	if strings.TrimSpace(sessionName) == "" {
