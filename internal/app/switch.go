@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/es5h/projmux/internal/config"
@@ -36,6 +37,7 @@ type candidateDiscoverer func(inputs candidates.Inputs) ([]string, error)
 
 type switchPinStore interface {
 	List() ([]string, error)
+	Add(path string) error
 	Toggle(path string) (bool, error)
 	Clear() error
 }
@@ -326,6 +328,11 @@ func (c *switchCommand) runSettings(stdout, stderr io.Writer) error {
 		}
 
 		switch {
+		case strings.HasPrefix(action, "add:"):
+			target := strings.TrimPrefix(action, "add:")
+			if err := c.addPin(target, stdout); err != nil {
+				return err
+			}
 		case action == "clear":
 			if err := c.clearPins(); err != nil {
 				return err
@@ -1054,6 +1061,27 @@ func (c *switchCommand) togglePin(target string, stdout io.Writer) error {
 	return err
 }
 
+func (c *switchCommand) addPin(target string, stdout io.Writer) error {
+	store, err := c.loadPinStore()
+	if err != nil {
+		return err
+	}
+	if store == nil {
+		return nil
+	}
+
+	if err := store.Add(target); err != nil {
+		return fmt.Errorf("add switch pin: %w", err)
+	}
+
+	if stdout == nil {
+		return nil
+	}
+
+	_, err = fmt.Fprintf(stdout, "pinned: %s\n", target)
+	return err
+}
+
 func (c *switchCommand) renderRows(ctx context.Context, candidatePaths []string) ([]intfzf.Entry, error) {
 	renderCandidates := make([]intrender.SwitchCandidate, 0, len(candidatePaths))
 	existingBySession, err := c.lookupExistingSessions(ctx, candidatePaths)
@@ -1168,7 +1196,14 @@ func (c *switchCommand) settingsEntries() ([]intfzf.Entry, error) {
 	}
 	repoRoot := cleanOptionalPath(c.env(repoRootEnvVar))
 
-	entries := make([]intfzf.Entry, 0, len(pins)+1)
+	entries := make([]intfzf.Entry, 0, len(pins)+2)
+	currentTarget, err := c.resolveSwitchTarget(nil, "switch settings")
+	if err == nil && currentTarget != "" && currentTarget != switchSettingsSentinel && !containsString(pins, currentTarget) {
+		entries = append(entries, intfzf.Entry{
+			Label: "add pin  " + intrender.PrettyPath(currentTarget, homeDir, repoRoot),
+			Value: "add:" + currentTarget,
+		})
+	}
 	if len(pins) != 0 {
 		entries = append(entries, intfzf.Entry{
 			Label: "clear all pins",
@@ -1228,4 +1263,8 @@ func (c *switchCommand) clearPins() error {
 		return fmt.Errorf("clear switch pins: %w", err)
 	}
 	return nil
+}
+
+func containsString(items []string, target string) bool {
+	return slices.Contains(items, target)
 }
