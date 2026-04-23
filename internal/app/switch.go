@@ -25,6 +25,7 @@ const (
 	switchUIPopup            = "popup"
 	switchUISidebar          = "sidebar"
 	switchTagExpectKey       = "alt-t"
+	switchPinExpectKey       = "alt-p"
 	managedRootsEnvVar       = "PROJMUX_MANAGED_ROOTS"
 	legacyManagedRootsEnvVar = "TMUX_SESSIONIZER_ROOTS"
 	repoRootEnvVar           = "RP"
@@ -34,6 +35,7 @@ type candidateDiscoverer func(inputs candidates.Inputs) ([]string, error)
 
 type switchPinStore interface {
 	List() ([]string, error)
+	Toggle(path string) (bool, error)
 }
 
 type switchPinStoreFactory func() (switchPinStore, error)
@@ -145,6 +147,8 @@ func (c *switchCommand) Run(args []string, stdout, stderr io.Writer) error {
 		switch args[0] {
 		case "toggle-tag":
 			return c.runToggleTag(args[1:], stdout, stderr)
+		case "toggle-pin":
+			return c.runTogglePin(args[1:], stdout, stderr)
 		case "preview":
 			return c.runPreview(args[1:], stdout, stderr)
 		case "cycle-pane":
@@ -225,6 +229,33 @@ func (c *switchCommand) runToggleTag(args []string, stdout, stderr io.Writer) er
 	}
 
 	return c.toggleTag(target, stdout)
+}
+
+func (c *switchCommand) runTogglePin(args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("switch toggle-pin", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.Usage = func() {
+		printSwitchUsage(stderr)
+	}
+
+	if err := fs.Parse(args); err != nil {
+		printSwitchUsage(stderr)
+		return err
+	}
+	if fs.NArg() > 1 {
+		printSwitchUsage(stderr)
+		return fmt.Errorf("switch toggle-pin accepts at most 1 [path] argument")
+	}
+
+	target, err := c.resolveSwitchTarget(fs.Args(), "switch toggle-pin")
+	if err != nil {
+		if strings.Contains(err.Error(), "switch toggle-pin requires") {
+			printSwitchUsage(stderr)
+		}
+		return err
+	}
+
+	return c.togglePin(target, stdout)
 }
 
 func (c *switchCommand) runPreview(args []string, stdout, stderr io.Writer) error {
@@ -340,6 +371,23 @@ func (c *switchCommand) resolveHomeDir() (string, error) {
 }
 
 func (c *switchCommand) loadPins() ([]string, error) {
+	store, err := c.loadPinStore()
+	if err != nil {
+		return nil, err
+	}
+	if store == nil {
+		return nil, nil
+	}
+
+	paths, err := store.List()
+	if err != nil {
+		return nil, fmt.Errorf("load pin set: %w", err)
+	}
+
+	return paths, nil
+}
+
+func (c *switchCommand) loadPinStore() (switchPinStore, error) {
 	if c.pinStore == nil {
 		return nil, nil
 	}
@@ -352,12 +400,7 @@ func (c *switchCommand) loadPins() ([]string, error) {
 		return nil, nil
 	}
 
-	paths, err := store.List()
-	if err != nil {
-		return nil, fmt.Errorf("load pin set: %w", err)
-	}
-
-	return paths, nil
+	return store, nil
 }
 
 func (c *switchCommand) resolveWorkingDir() (string, error) {
@@ -795,6 +838,12 @@ func (c *switchCommand) execute(ctx context.Context, plan switchPlan, stdout io.
 		}
 		return true, nil
 	}
+	if plan.Action == switchPinExpectKey {
+		if err := c.togglePin(plan.Selection, nil); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
 	if plan.SessionName == "" {
 		return false, fmt.Errorf("switch command requires a target session")
 	}
@@ -821,7 +870,7 @@ func (c *switchCommand) runPicker(plan switchPlan) (intfzf.Result, error) {
 		UI:         plan.UI,
 		Candidates: plan.Candidates,
 		Entries:    plan.Rows,
-		ExpectKeys: []string{switchTagExpectKey},
+		ExpectKeys: []string{switchTagExpectKey, switchPinExpectKey},
 	}
 	if previewCommand, bindings, err := c.switchPickerSurface(plan.UI); err != nil {
 		return intfzf.Result{}, err
@@ -915,6 +964,29 @@ func (c *switchCommand) toggleTag(target string, stdout io.Writer) error {
 	return err
 }
 
+func (c *switchCommand) togglePin(target string, stdout io.Writer) error {
+	store, err := c.loadPinStore()
+	if err != nil {
+		return err
+	}
+
+	pinned, err := store.Toggle(target)
+	if err != nil {
+		return fmt.Errorf("toggle switch candidate pin: %w", err)
+	}
+	if stdout == nil {
+		return nil
+	}
+
+	if pinned {
+		_, err = fmt.Fprintf(stdout, "pinned: %s\n", target)
+		return err
+	}
+
+	_, err = fmt.Fprintf(stdout, "unpinned: %s\n", target)
+	return err
+}
+
 func (c *switchCommand) renderRows(ctx context.Context, candidatePaths []string) ([]intfzf.Entry, error) {
 	renderCandidates := make([]intrender.SwitchCandidate, 0, len(candidatePaths))
 	existingBySession, err := c.lookupExistingSessions(ctx, candidatePaths)
@@ -992,6 +1064,7 @@ func printSwitchUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  projmux switch [--ui=popup|sidebar]")
 	fmt.Fprintln(w, "  projmux switch toggle-tag [path]")
+	fmt.Fprintln(w, "  projmux switch toggle-pin [path]")
 	fmt.Fprintln(w, "  projmux switch preview [path]")
 	fmt.Fprintln(w, "  projmux switch cycle-pane <path> <next|prev>")
 	fmt.Fprintln(w, "  projmux switch cycle-window <path> <next|prev>")
@@ -1001,4 +1074,5 @@ func printSwitchUsage(w io.Writer) {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Picker Actions:")
 	fmt.Fprintln(w, "  alt-t         Toggle a tag on the focused candidate and reopen the picker")
+	fmt.Fprintln(w, "  alt-p         Toggle a pin on the focused candidate and reopen the picker")
 }
