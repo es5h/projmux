@@ -19,8 +19,8 @@ func TestAppRunSessionsDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 		sessions: &sessionsCommand{
 			recent: sessionsRecentFunc(func(context.Context) ([]inttmux.RecentSessionSummary, error) {
 				return []inttmux.RecentSessionSummary{
-					{Name: "repo-b", Attached: true, PaneCount: 4, Path: "/tmp/repo-b"},
-					{Name: "home", Attached: false, PaneCount: 1, Path: "/home/tester"},
+					{Name: "repo-b", Attached: true, WindowCount: 3, PaneCount: 4, Path: "/tmp/repo-b"},
+					{Name: "home", Attached: false, WindowCount: 1, PaneCount: 1, Path: "/home/tester"},
 				}, nil
 			}),
 			store: &recordingSessionsStore{
@@ -49,8 +49,8 @@ func TestAppRunSessionsDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 		t.Fatalf("runner UI = %q, want %q", got, want)
 	}
 	if got, want := gotOptions.Entries, []intfzf.Entry{
-		{Label: "repo-b  [attached]  4p  /tmp/repo-b", Value: "repo-b"},
-		{Label: "home  [detached]  1p  /home/tester", Value: "home"},
+		{Label: "repo-b  [attached]  3w  4p  /tmp/repo-b", Value: "repo-b"},
+		{Label: "home  [detached]  1w  1p  /home/tester", Value: "home"},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
 	}

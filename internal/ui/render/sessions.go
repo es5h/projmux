@@ -21,6 +21,9 @@ func BuildSessionRows(summaries []inttmux.RecentSessionSummary) []SessionRow {
 			status = "attached"
 		}
 		label += "  [" + status + "]"
+		if summary.WindowCount > 0 {
+			label += "  " + sanitizeCell(strconv.Itoa(summary.WindowCount)) + "w"
+		}
 		if summary.PaneCount > 0 {
 			label += "  " + sanitizeCell(strconv.Itoa(summary.PaneCount)) + "p"
 		}

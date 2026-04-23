@@ -110,7 +110,7 @@ func TestClientRecentSessionsSortsByActivityDescending(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("10\tstale\t0\n35\tfresh\t1\n35\ttie-kept-order\t0\n"), nil
+		return []byte("10\tstale\t0\t1\n35\tfresh\t1\t3\n35\ttie-kept-order\t0\t2\n"), nil
 	}))
 
 	sessions, err := client.RecentSessions(context.Background())
@@ -176,7 +176,7 @@ func TestClientRecentSessionsRejectsInvalidActivity(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("oops\tdotfiles\t1"), nil
+		return []byte("oops\tdotfiles\t1\t2"), nil
 	}))
 
 	_, err := client.RecentSessions(context.Background())
@@ -272,7 +272,7 @@ func TestClientRecentSessionsRejectsEmptySessionNames(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("10\t \t1\n"), nil
+		return []byte("10\t \t1\t2\n"), nil
 	}))
 
 	_, err := client.RecentSessions(context.Background())
@@ -292,10 +292,10 @@ func TestClientRecentSessionSummariesIncludeAttachedPaneCountAndPath(t *testing.
 		call++
 		switch call {
 		case 1:
-			if got, want := args, []string{"list-sessions", "-F", "#{session_activity}\t#{session_name}\t#{session_attached}"}; !reflect.DeepEqual(got, want) {
+			if got, want := args, []string{"list-sessions", "-F", "#{session_activity}\t#{session_name}\t#{session_attached}\t#{session_windows}"}; !reflect.DeepEqual(got, want) {
 				t.Fatalf("list-sessions args = %#v, want %#v", got, want)
 			}
-			return []byte("10\tstale\t0\n35\tfresh\t1\n"), nil
+			return []byte("10\tstale\t0\t1\n35\tfresh\t1\t3\n"), nil
 		case 2:
 			if got, want := args, []string{"list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{pane_index}\t#{?pane_active,1,0}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}"}; !reflect.DeepEqual(got, want) {
 				t.Fatalf("list-panes args = %#v, want %#v", got, want)
@@ -317,8 +317,8 @@ func TestClientRecentSessionSummariesIncludeAttachedPaneCountAndPath(t *testing.
 	}
 
 	want := []RecentSessionSummary{
-		{Name: "fresh", Attached: true, PaneCount: 2, Path: "/tmp/fresh-active", Activity: 35},
-		{Name: "stale", Attached: false, PaneCount: 1, Path: "/tmp/stale", Activity: 10},
+		{Name: "fresh", Attached: true, WindowCount: 3, PaneCount: 2, Path: "/tmp/fresh-active", Activity: 35},
+		{Name: "stale", Attached: false, WindowCount: 1, PaneCount: 1, Path: "/tmp/stale", Activity: 10},
 	}
 	if !reflect.DeepEqual(summaries, want) {
 		t.Fatalf("RecentSessionSummaries = %#v, want %#v", summaries, want)
@@ -332,7 +332,7 @@ func TestClientRecentSessionSummariesPropagatePaneListingErrors(t *testing.T) {
 	client := NewClient(staticRunner(func(_ context.Context, _ string, _ ...string) ([]byte, error) {
 		call++
 		if call == 1 {
-			return []byte("35\tfresh\t1\n"), nil
+			return []byte("35\tfresh\t1\t3\n"), nil
 		}
 		return nil, errors.New("tmux failed")
 	}))
