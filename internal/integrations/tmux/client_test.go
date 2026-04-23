@@ -1252,6 +1252,20 @@ func TestBuildSwitchCyclePaneCommandQuotesInputs(t *testing.T) {
 	}
 }
 
+func TestBuildSwitchSidebarFocusCommandQuotesBinaryPath(t *testing.T) {
+	t.Parallel()
+
+	command, err := BuildSwitchSidebarFocusCommand("/tmp/projmux's bin")
+	if err != nil {
+		t.Fatalf("BuildSwitchSidebarFocusCommand returned error: %v", err)
+	}
+
+	const want = "exec '/tmp/projmux'\\''s bin' 'switch' 'sidebar-focus' {2}"
+	if command != want {
+		t.Fatalf("command = %q, want %q", command, want)
+	}
+}
+
 func TestClientEnsureSessionRequiresCWD(t *testing.T) {
 	t.Parallel()
 

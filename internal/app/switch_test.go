@@ -98,7 +98,7 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 	if got, want := gotRunnerOptions.PreviewCommand, "exec '/tmp/projmux' 'switch' 'preview' {2}"; got != want {
 		t.Fatalf("runner preview command = %q, want %q", got, want)
 	}
-	if got, want := gotRunnerOptions.PreviewWindow, "down,35%,border-top"; got != want {
+	if got, want := gotRunnerOptions.PreviewWindow, "right,60%,border-left"; got != want {
 		t.Fatalf("runner preview window = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Bindings, []string{
@@ -164,20 +164,17 @@ func TestSwitchCommandSupportsSidebarUI(t *testing.T) {
 	if got, want := gotRunnerOptions.Prompt, "› "; got != want {
 		t.Fatalf("runner prompt = %q, want %q", got, want)
 	}
-	if got, want := gotRunnerOptions.Footer, "Enter: switch/create previewed target\nAlt-T: tag focused directory\nAlt-P: pin/unpin focused directory\nLeft/Right: preview window\nAlt-Up/Alt-Down: preview pane"; got != want {
+	if got, want := gotRunnerOptions.Footer, "Enter: switch/create\nAlt-T: tag focused directory\nAlt-P: pin/unpin focused directory"; got != want {
 		t.Fatalf("runner footer = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.PreviewCommand, "exec '/tmp/projmux' 'switch' 'preview' {2}"; got != want {
 		t.Fatalf("runner preview command = %q, want %q", got, want)
 	}
-	if got, want := gotRunnerOptions.PreviewWindow, "right,60%,border-left"; got != want {
+	if got, want := gotRunnerOptions.PreviewWindow, "down,35%,border-top"; got != want {
 		t.Fatalf("runner preview window = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Bindings, []string{
-		"left:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-window' {2} 'prev')+refresh-preview",
-		"right:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-window' {2} 'next')+refresh-preview",
-		"alt-up:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-pane' {2} 'prev')+refresh-preview",
-		"alt-down:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-pane' {2} 'next')+refresh-preview",
+		"focus:execute-silent(exec '/tmp/projmux' 'switch' 'sidebar-focus' {2})",
 	}; !equalStrings(got, want) {
 		t.Fatalf("runner bindings = %q, want %q", got, want)
 	}
@@ -186,6 +183,78 @@ func TestSwitchCommandSupportsSidebarUI(t *testing.T) {
 		{Label: "Settings", Value: switchSettingsSentinel},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
+	}
+}
+
+func TestSwitchCommandSidebarUsesContextSessionForInitialPosition(t *testing.T) {
+	t.Parallel()
+
+	var gotRunnerOptions intfzf.Options
+	cmd := &switchCommand{
+		discover: func(candidates.Inputs) ([]string, error) {
+			return []string{"/tmp/a", "/tmp/b"}, nil
+		},
+		pinStore: func() (switchPinStore, error) { return &stubSwitchPinStore{}, nil },
+		runner: switchRunnerFunc(func(options intfzf.Options) (intfzf.Result, error) {
+			gotRunnerOptions = options
+			return intfzf.Result{}, nil
+		}),
+		sessions: &capturingSwitchSessionExecutor{
+			exists: map[string]bool{"session-b": true},
+		},
+		executable: func() (string, error) { return "/tmp/projmux", nil },
+		identity: switchIdentityResolverFunc(func(path string) (string, error) {
+			switch path {
+			case "/tmp/a":
+				return "session-a", nil
+			case "/tmp/b":
+				return "session-b", nil
+			default:
+				return "", errors.New("unexpected path")
+			}
+		}),
+		validate:   func(string) error { return nil },
+		homeDir:    func() (string, error) { return "/home/tester", nil },
+		workingDir: func() (string, error) { return "/tmp/a/deeper", nil },
+		lookupEnv: func(name string) string {
+			if name == switchContextSessionEnv {
+				return "session-b"
+			}
+			return ""
+		},
+	}
+
+	if err := cmd.Run([]string{"--ui=sidebar"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if got, want := gotRunnerOptions.Bindings, []string{
+		"start:pos(2)",
+		"focus:execute-silent(exec '/tmp/projmux' 'switch' 'sidebar-focus' {2})",
+	}; !equalStrings(got, want) {
+		t.Fatalf("runner bindings = %q, want %q", got, want)
+	}
+}
+
+func TestSwitchCommandSidebarFocusOpensExistingSession(t *testing.T) {
+	t.Parallel()
+
+	executor := &capturingSwitchSessionExecutor{
+		exists: map[string]bool{"tmp-app": true},
+	}
+	cmd := &switchCommand{
+		sessions: executor,
+		identity: stubSwitchIdentityResolver{name: "tmp-app"},
+	}
+
+	if err := cmd.Run([]string{"sidebar-focus", "/tmp/app"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got, want := executor.openSessionName, "tmp-app"; got != want {
+		t.Fatalf("open session = %q, want %q", got, want)
+	}
+	if got := executor.ensureSessionName; got != "" {
+		t.Fatalf("ensure session called unexpectedly: %q", got)
 	}
 }
 
@@ -300,19 +369,20 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 	if got, want := fakeRunner.last.PreviewCommand, "exec '/tmp/projmux' 'switch' 'preview' {2}"; got != want {
 		t.Fatalf("runner preview command = %q, want %q", got, want)
 	}
-	if got, want := fakeRunner.last.PreviewWindow, "right,60%,border-left"; got != want {
+	if got, want := fakeRunner.last.PreviewWindow, "down,35%,border-top"; got != want {
 		t.Fatalf("runner preview window = %q, want %q", got, want)
 	}
 	if got, want := fakeRunner.last.Bindings, []string{
-		"left:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-window' {2} 'prev')+refresh-preview",
-		"right:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-window' {2} 'next')+refresh-preview",
-		"alt-up:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-pane' {2} 'prev')+refresh-preview",
-		"alt-down:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-pane' {2} 'next')+refresh-preview",
+		"start:pos(4)",
+		"focus:execute-silent(exec '/tmp/projmux' 'switch' 'sidebar-focus' {2})",
 	}; !equalStrings(got, want) {
 		t.Fatalf("runner bindings = %q, want %q", got, want)
 	}
 	if got, want := fakeRunner.last.UI, switchUISidebar; got != want {
 		t.Fatalf("runner UI = %q, want %q", got, want)
+	}
+	if got, want := fakeRunner.last.Footer, "Enter: switch/create\nAlt-T: tag focused directory\nAlt-P: pin/unpin focused directory"; got != want {
+		t.Fatalf("runner footer = %q, want %q", got, want)
 	}
 	if got, want := fakeExecutor.ensureSessionName, "managed-work-a"; got != want {
 		t.Fatalf("ensure session = %q, want %q", got, want)
@@ -1296,6 +1366,12 @@ func (r stubSwitchIdentityResolver) SessionIdentityForPath(string) (string, erro
 		return "", r.err
 	}
 	return r.name, nil
+}
+
+type switchIdentityResolverFunc func(path string) (string, error)
+
+func (f switchIdentityResolverFunc) SessionIdentityForPath(path string) (string, error) {
+	return f(path)
 }
 
 type capturingSwitchSessionExecutor struct {

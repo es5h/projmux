@@ -28,6 +28,7 @@ const (
 	switchTagExpectKey       = "alt-t"
 	switchPinExpectKey       = "alt-p"
 	switchSettingsSentinel   = "__projmux_settings__"
+	switchContextSessionEnv  = "TMUX_SESSIONIZER_CONTEXT_SESSION"
 	managedRootsEnvVar       = "PROJMUX_MANAGED_ROOTS"
 	legacyManagedRootsEnvVar = "TMUX_SESSIONIZER_ROOTS"
 	repoRootEnvVar           = "RP"
@@ -89,12 +90,15 @@ type switchCommand struct {
 }
 
 type switchPlan struct {
-	UI          string
-	Candidates  []string
-	Rows        []intfzf.Entry
-	Action      string
-	Selection   string
-	SessionName string
+	UI            string
+	Candidates    []string
+	Rows          []intfzf.Entry
+	Action        string
+	Selection     string
+	SessionName   string
+	HomeDir       string
+	CurrentPath   string
+	OriginSession string
 }
 
 func newSwitchCommand() *switchCommand {
@@ -161,6 +165,8 @@ func (c *switchCommand) Run(args []string, stdout, stderr io.Writer) error {
 			return c.runCyclePane(args[1:], stderr)
 		case "cycle-window":
 			return c.runCycleWindow(args[1:], stderr)
+		case "sidebar-focus":
+			return c.runSidebarFocus(args[1:], stdout, stderr)
 		}
 	}
 
@@ -418,8 +424,11 @@ func (c *switchCommand) planFromInputs(ui string, inputs candidates.Inputs) (swi
 	paths = append(paths, switchSettingsSentinel)
 
 	plan := switchPlan{
-		UI:         ui,
-		Candidates: paths,
+		UI:            ui,
+		Candidates:    paths,
+		HomeDir:       homeDir,
+		CurrentPath:   cleanOptionalPath(inputs.CurrentPath),
+		OriginSession: strings.TrimSpace(c.env(switchContextSessionEnv)),
 	}
 
 	return c.completePlan(plan)
@@ -968,6 +977,44 @@ func (c *switchCommand) execute(ctx context.Context, plan switchPlan, stdout io.
 	return false, nil
 }
 
+func (c *switchCommand) runSidebarFocus(args []string, _ io.Writer, stderr io.Writer) error {
+	if len(args) != 1 {
+		printSwitchUsage(stderr)
+		return fmt.Errorf("switch sidebar-focus requires exactly 1 argument: <path>")
+	}
+
+	target := cleanOptionalPath(args[0])
+	if target == "" || target == switchSettingsSentinel {
+		return nil
+	}
+
+	if c.identityErr != nil {
+		return fmt.Errorf("configure session identity resolver: %w", c.identityErr)
+	}
+	if c.identity == nil {
+		return fmt.Errorf("switch session identity resolver is not configured")
+	}
+	if c.sessions == nil {
+		return fmt.Errorf("switch session executor is not configured")
+	}
+
+	sessionName, err := c.identity.SessionIdentityForPath(target)
+	if err != nil {
+		return fmt.Errorf("resolve sidebar focus session identity: %w", err)
+	}
+	exists, err := c.switchSessionExists(context.Background(), sessionName)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+	if err := c.sessions.OpenSession(context.Background(), sessionName); err != nil {
+		return fmt.Errorf("open tmux session %q on sidebar focus: %w", sessionName, err)
+	}
+	return nil
+}
+
 func (c *switchCommand) runPicker(plan switchPlan) (intfzf.Result, error) {
 	if c.runner == nil {
 		return intfzf.Result{}, fmt.Errorf("switch runner is not configured")
@@ -981,7 +1028,7 @@ func (c *switchCommand) runPicker(plan switchPlan) (intfzf.Result, error) {
 		Footer:     switchPickerFooter(plan.UI),
 		ExpectKeys: []string{switchTagExpectKey, switchPinExpectKey},
 	}
-	if previewCommand, bindings, err := c.switchPickerSurface(plan.UI); err != nil {
+	if previewCommand, bindings, err := c.switchPickerSurface(plan); err != nil {
 		return intfzf.Result{}, err
 	} else if previewCommand != "" {
 		options.PreviewCommand = previewCommand
@@ -997,7 +1044,7 @@ func (c *switchCommand) runPicker(plan switchPlan) (intfzf.Result, error) {
 	return result, nil
 }
 
-func (c *switchCommand) switchPickerSurface(ui string) (string, []string, error) {
+func (c *switchCommand) switchPickerSurface(plan switchPlan) (string, []string, error) {
 	if c.executable == nil {
 		return "", nil, nil
 	}
@@ -1029,12 +1076,25 @@ func (c *switchCommand) switchPickerSurface(ui string) (string, []string, error)
 		return "", nil, fmt.Errorf("build switch pane-next command: %w", err)
 	}
 
-	bindings := []string{
-		"left:execute-silent(" + windowPrev + ")+refresh-preview",
-		"right:execute-silent(" + windowNext + ")+refresh-preview",
-		"alt-up:execute-silent(" + panePrev + ")+refresh-preview",
-		"alt-down:execute-silent(" + paneNext + ")+refresh-preview",
+	bindings := []string{}
+	if plan.UI == switchUISidebar {
+		if pos := switchSidebarInitialPos(plan); pos > 0 {
+			bindings = append(bindings, fmt.Sprintf("start:pos(%d)", pos))
+		}
+		sidebarFocus, err := inttmux.BuildSwitchSidebarFocusCommand(binaryPath)
+		if err != nil {
+			return "", nil, fmt.Errorf("build switch sidebar-focus command: %w", err)
+		}
+		bindings = append(bindings, "focus:execute-silent("+sidebarFocus+")")
+		return previewCommand, bindings, nil
 	}
+
+	bindings = append(bindings,
+		"left:execute-silent("+windowPrev+")+refresh-preview",
+		"right:execute-silent("+windowNext+")+refresh-preview",
+		"alt-up:execute-silent("+panePrev+")+refresh-preview",
+		"alt-down:execute-silent("+paneNext+")+refresh-preview",
+	)
 
 	return previewCommand, bindings, nil
 }
@@ -1042,27 +1102,75 @@ func (c *switchCommand) switchPickerSurface(ui string) (string, []string, error)
 func switchPreviewWindow(ui string) string {
 	switch ui {
 	case switchUISidebar:
-		return "right,60%,border-left"
-	case switchUIPopup:
 		return "down,35%,border-top"
+	case switchUIPopup:
+		return "right,60%,border-left"
 	default:
 		return ""
 	}
 }
 
 func switchPickerFooter(ui string) string {
-	lines := []string{
+	if ui == switchUISidebar {
+		return strings.Join([]string{
+			"Enter: switch/create",
+			"Alt-T: tag focused directory",
+			"Alt-P: pin/unpin focused directory",
+		}, "\n")
+	}
+	return strings.Join([]string{
 		"Enter: switch/create previewed target",
 		"Alt-T: tag focused directory",
 		"Alt-P: pin/unpin focused directory",
+		"Left/Right: preview window",
+		"Alt-Up/Alt-Down: preview pane",
+	}, "\n")
+}
+
+func switchSidebarInitialPos(plan switchPlan) int {
+	idx := 0
+	homeIdx := 0
+	pathMatchIdx := 0
+	currentTarget := bestSwitchCandidateMatch(plan.CurrentPath, plan.Candidates)
+
+	for _, entry := range plan.Rows {
+		value := cleanOptionalPath(entry.Value)
+		if value == "" || value == switchSettingsSentinel {
+			continue
+		}
+		idx++
+
+		if homeIdx == 0 && value == cleanOptionalPath(plan.HomeDir) {
+			homeIdx = idx
+		}
+		if plan.OriginSession != "" {
+			if sessionName := switchSessionNameForRow(plan, value); sessionName == plan.OriginSession {
+				return idx
+			}
+		}
+		if pathMatchIdx == 0 && currentTarget != "" && value == cleanOptionalPath(currentTarget) {
+			pathMatchIdx = idx
+		}
 	}
-	if ui == switchUISidebar || ui == switchUIPopup {
-		lines = append(lines,
-			"Left/Right: preview window",
-			"Alt-Up/Alt-Down: preview pane",
-		)
+
+	if pathMatchIdx != 0 {
+		return pathMatchIdx
 	}
-	return strings.Join(lines, "\n")
+	return homeIdx
+}
+
+func switchSessionNameForRow(plan switchPlan, value string) string {
+	for _, entry := range plan.Rows {
+		if cleanOptionalPath(entry.Value) == value {
+			label := strings.TrimSpace(entry.Label)
+			if label == "" || label == "Settings" {
+				return ""
+			}
+			name, _, _ := strings.Cut(label, "  [")
+			return strings.TrimSpace(name)
+		}
+	}
+	return ""
 }
 
 func (c *switchCommand) toggleTag(target string, stdout io.Writer) error {

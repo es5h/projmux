@@ -655,6 +655,17 @@ func BuildSwitchCyclePaneCommand(binaryPath, direction string) (string, error) {
 	return buildExecCommand(binaryPath, "switch", "cycle-pane") + " {2} " + shellQuote(direction), nil
 }
 
+// BuildSwitchSidebarFocusCommand builds the shell command used by fzf sidebar
+// focus bindings to jump to an already-existing session for the focused path.
+func BuildSwitchSidebarFocusCommand(binaryPath string) (string, error) {
+	binaryPath = strings.TrimSpace(binaryPath)
+	if binaryPath == "" {
+		return "", errors.New("switch sidebar focus binary path is required")
+	}
+
+	return buildExecCommand(binaryPath, "switch", "sidebar-focus") + " {2}", nil
+}
+
 func buildExecCommand(binaryPath string, args ...string) string {
 	quoted := make([]string, 0, len(args)+2)
 	quoted = append(quoted, "exec", shellQuote(binaryPath))
