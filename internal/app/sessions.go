@@ -15,7 +15,7 @@ import (
 )
 
 type sessionsRecentResolver interface {
-	RecentSessions(ctx context.Context) ([]string, error)
+	RecentSessionSummaries(ctx context.Context) ([]inttmux.RecentSessionSummary, error)
 }
 
 type sessionsSelectionStore interface {
@@ -74,11 +74,11 @@ func (c *sessionsCommand) Run(args []string, stdout, stderr io.Writer) error {
 	if c.recent == nil {
 		return fmt.Errorf("recent tmux session resolver is not configured")
 	}
-	sessionNames, err := c.recent.RecentSessions(context.Background())
+	summaries, err := c.recent.RecentSessionSummaries(context.Background())
 	if err != nil {
 		return fmt.Errorf("resolve recent tmux sessions: %w", err)
 	}
-	if len(sessionNames) == 0 {
+	if len(summaries) == 0 {
 		return nil
 	}
 
@@ -116,7 +116,7 @@ func (c *sessionsCommand) Run(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("build sessions cycle-pane next command: %w", err)
 	}
 
-	rows := intrender.BuildSessionRows(sessionNames)
+	rows := intrender.BuildSessionRows(summaries)
 	result, err := c.runner.Run(intfzf.Options{
 		UI:             *ui,
 		Entries:        rowsToEntries(rows),

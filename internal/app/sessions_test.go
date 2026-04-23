@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	corepreview "github.com/es5h/projmux/internal/core/preview"
+	inttmux "github.com/es5h/projmux/internal/integrations/tmux"
 	intfzf "github.com/es5h/projmux/internal/ui/fzf"
 )
 
@@ -16,8 +17,11 @@ func TestAppRunSessionsDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 	var gotOptions intfzf.Options
 	app := &App{
 		sessions: &sessionsCommand{
-			recent: sessionsRecentFunc(func(context.Context) ([]string, error) {
-				return []string{"repo-b", "home"}, nil
+			recent: sessionsRecentFunc(func(context.Context) ([]inttmux.RecentSessionSummary, error) {
+				return []inttmux.RecentSessionSummary{
+					{Name: "repo-b", Attached: true, PaneCount: 4, Path: "/tmp/repo-b"},
+					{Name: "home", Attached: false, PaneCount: 1, Path: "/home/tester"},
+				}, nil
 			}),
 			store: &recordingSessionsStore{
 				found: true,
@@ -45,8 +49,8 @@ func TestAppRunSessionsDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 		t.Fatalf("runner UI = %q, want %q", got, want)
 	}
 	if got, want := gotOptions.Entries, []intfzf.Entry{
-		{Label: "repo-b", Value: "repo-b"},
-		{Label: "home", Value: "home"},
+		{Label: "repo-b  [attached]  4p  /tmp/repo-b", Value: "repo-b"},
+		{Label: "home  [detached]  1p  /home/tester", Value: "home"},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
 	}
@@ -80,8 +84,8 @@ func TestSessionsCommandSupportsSidebarUI(t *testing.T) {
 
 	var gotOptions intfzf.Options
 	cmd := &sessionsCommand{
-		recent: sessionsRecentFunc(func(context.Context) ([]string, error) {
-			return []string{"repo-b"}, nil
+		recent: sessionsRecentFunc(func(context.Context) ([]inttmux.RecentSessionSummary, error) {
+			return []inttmux.RecentSessionSummary{{Name: "repo-b"}}, nil
 		}),
 		runner: sessionsRunnerFunc(func(options intfzf.Options) (intfzf.Result, error) {
 			gotOptions = options
@@ -107,8 +111,8 @@ func TestSessionsCommandAllowsEmptySelection(t *testing.T) {
 
 	opener := &recordingSessionsOpener{}
 	cmd := &sessionsCommand{
-		recent: sessionsRecentFunc(func(context.Context) ([]string, error) {
-			return []string{"repo-b"}, nil
+		recent: sessionsRecentFunc(func(context.Context) ([]inttmux.RecentSessionSummary, error) {
+			return []inttmux.RecentSessionSummary{{Name: "repo-b"}}, nil
 		}),
 		runner: sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) {
 			return intfzf.Result{}, nil
@@ -130,7 +134,7 @@ func TestSessionsCommandReturnsWithoutPickerWhenRecentListIsEmpty(t *testing.T) 
 
 	called := false
 	cmd := &sessionsCommand{
-		recent: sessionsRecentFunc(func(context.Context) ([]string, error) {
+		recent: sessionsRecentFunc(func(context.Context) ([]inttmux.RecentSessionSummary, error) {
 			return nil, nil
 		}),
 		runner: sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) {
@@ -192,7 +196,7 @@ func TestSessionsCommandPropagatesSetupErrors(t *testing.T) {
 		{
 			name: "recent sessions",
 			cmd: &sessionsCommand{
-				recent: sessionsRecentFunc(func(context.Context) ([]string, error) {
+				recent: sessionsRecentFunc(func(context.Context) ([]inttmux.RecentSessionSummary, error) {
 					return nil, errors.New("tmux failed")
 				}),
 			},
@@ -201,7 +205,9 @@ func TestSessionsCommandPropagatesSetupErrors(t *testing.T) {
 		{
 			name: "executable resolver",
 			cmd: &sessionsCommand{
-				recent: sessionsRecentFunc(func(context.Context) ([]string, error) { return []string{"repo-b"}, nil }),
+				recent: sessionsRecentFunc(func(context.Context) ([]inttmux.RecentSessionSummary, error) {
+					return []inttmux.RecentSessionSummary{{Name: "repo-b"}}, nil
+				}),
 				runner: sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) {
 					return intfzf.Result{}, nil
 				}),
@@ -211,7 +217,9 @@ func TestSessionsCommandPropagatesSetupErrors(t *testing.T) {
 		{
 			name: "resolve executable",
 			cmd: &sessionsCommand{
-				recent:     sessionsRecentFunc(func(context.Context) ([]string, error) { return []string{"repo-b"}, nil }),
+				recent: sessionsRecentFunc(func(context.Context) ([]inttmux.RecentSessionSummary, error) {
+					return []inttmux.RecentSessionSummary{{Name: "repo-b"}}, nil
+				}),
 				runner:     sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) { return intfzf.Result{}, nil }),
 				executable: func() (string, error) { return "", errors.New("not found") },
 			},
@@ -220,7 +228,9 @@ func TestSessionsCommandPropagatesSetupErrors(t *testing.T) {
 		{
 			name: "runner",
 			cmd: &sessionsCommand{
-				recent: sessionsRecentFunc(func(context.Context) ([]string, error) { return []string{"repo-b"}, nil }),
+				recent: sessionsRecentFunc(func(context.Context) ([]inttmux.RecentSessionSummary, error) {
+					return []inttmux.RecentSessionSummary{{Name: "repo-b"}}, nil
+				}),
 				runner: sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) {
 					return intfzf.Result{}, errors.New("fzf failed")
 				}),
@@ -231,7 +241,9 @@ func TestSessionsCommandPropagatesSetupErrors(t *testing.T) {
 		{
 			name: "missing opener",
 			cmd: &sessionsCommand{
-				recent: sessionsRecentFunc(func(context.Context) ([]string, error) { return []string{"repo-b"}, nil }),
+				recent: sessionsRecentFunc(func(context.Context) ([]inttmux.RecentSessionSummary, error) {
+					return []inttmux.RecentSessionSummary{{Name: "repo-b"}}, nil
+				}),
 				runner: sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) {
 					return intfzf.Result{Value: "repo-b"}, nil
 				}),
@@ -242,7 +254,9 @@ func TestSessionsCommandPropagatesSetupErrors(t *testing.T) {
 		{
 			name: "load selection",
 			cmd: &sessionsCommand{
-				recent:     sessionsRecentFunc(func(context.Context) ([]string, error) { return []string{"repo-b"}, nil }),
+				recent: sessionsRecentFunc(func(context.Context) ([]inttmux.RecentSessionSummary, error) {
+					return []inttmux.RecentSessionSummary{{Name: "repo-b"}}, nil
+				}),
 				store:      &recordingSessionsStore{err: errors.New("state failed")},
 				runner:     sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) { return intfzf.Result{Value: "repo-b"}, nil }),
 				executable: func() (string, error) { return "/tmp/projmux", nil },
@@ -253,7 +267,9 @@ func TestSessionsCommandPropagatesSetupErrors(t *testing.T) {
 		{
 			name: "open session",
 			cmd: &sessionsCommand{
-				recent: sessionsRecentFunc(func(context.Context) ([]string, error) { return []string{"repo-b"}, nil }),
+				recent: sessionsRecentFunc(func(context.Context) ([]inttmux.RecentSessionSummary, error) {
+					return []inttmux.RecentSessionSummary{{Name: "repo-b"}}, nil
+				}),
 				runner: sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) {
 					return intfzf.Result{Value: "repo-b"}, nil
 				}),
@@ -279,9 +295,9 @@ func TestSessionsCommandPropagatesSetupErrors(t *testing.T) {
 	}
 }
 
-type sessionsRecentFunc func(context.Context) ([]string, error)
+type sessionsRecentFunc func(context.Context) ([]inttmux.RecentSessionSummary, error)
 
-func (f sessionsRecentFunc) RecentSessions(ctx context.Context) ([]string, error) {
+func (f sessionsRecentFunc) RecentSessionSummaries(ctx context.Context) ([]inttmux.RecentSessionSummary, error) {
 	return f(ctx)
 }
 

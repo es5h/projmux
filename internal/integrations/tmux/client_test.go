@@ -110,7 +110,7 @@ func TestClientRecentSessionsSortsByActivityDescending(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("10\tstale\n35\tfresh\n35\ttie-kept-order\n"), nil
+		return []byte("10\tstale\t0\n35\tfresh\t1\n35\ttie-kept-order\t0\n"), nil
 	}))
 
 	sessions, err := client.RecentSessions(context.Background())
@@ -176,7 +176,7 @@ func TestClientRecentSessionsRejectsInvalidActivity(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("oops\tdotfiles"), nil
+		return []byte("oops\tdotfiles\t1"), nil
 	}))
 
 	_, err := client.RecentSessions(context.Background())
@@ -272,7 +272,7 @@ func TestClientRecentSessionsRejectsEmptySessionNames(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("10\t \n"), nil
+		return []byte("10\t \t1\n"), nil
 	}))
 
 	_, err := client.RecentSessions(context.Background())
@@ -281,6 +281,68 @@ func TestClientRecentSessionsRejectsEmptySessionNames(t *testing.T) {
 	}
 	if !errors.Is(err, errSessionNameRequired) {
 		t.Fatalf("RecentSessions error = %v, want %v", err, errSessionNameRequired)
+	}
+}
+
+func TestClientRecentSessionSummariesIncludeAttachedPaneCountAndPath(t *testing.T) {
+	t.Parallel()
+
+	call := 0
+	client := NewClient(staticRunner(func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		call++
+		switch call {
+		case 1:
+			if got, want := args, []string{"list-sessions", "-F", "#{session_activity}\t#{session_name}\t#{session_attached}"}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("list-sessions args = %#v, want %#v", got, want)
+			}
+			return []byte("10\tstale\t0\n35\tfresh\t1\n"), nil
+		case 2:
+			if got, want := args, []string{"list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{pane_index}\t#{?pane_active,1,0}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}"}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("list-panes args = %#v, want %#v", got, want)
+			}
+			return []byte(
+				"fresh\t0\t0\t0\tshell\tzsh\t/tmp/fresh-first\n" +
+					"fresh\t0\t1\t1\teditor\tnvim\t/tmp/fresh-active\n" +
+					"stale\t0\t0\t0\tshell\tzsh\t/tmp/stale\n",
+			), nil
+		default:
+			t.Fatalf("unexpected call %d", call)
+			return nil, nil
+		}
+	}))
+
+	summaries, err := client.RecentSessionSummaries(context.Background())
+	if err != nil {
+		t.Fatalf("RecentSessionSummaries returned error: %v", err)
+	}
+
+	want := []RecentSessionSummary{
+		{Name: "fresh", Attached: true, PaneCount: 2, Path: "/tmp/fresh-active", Activity: 35},
+		{Name: "stale", Attached: false, PaneCount: 1, Path: "/tmp/stale", Activity: 10},
+	}
+	if !reflect.DeepEqual(summaries, want) {
+		t.Fatalf("RecentSessionSummaries = %#v, want %#v", summaries, want)
+	}
+}
+
+func TestClientRecentSessionSummariesPropagatePaneListingErrors(t *testing.T) {
+	t.Parallel()
+
+	call := 0
+	client := NewClient(staticRunner(func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+		call++
+		if call == 1 {
+			return []byte("35\tfresh\t1\n"), nil
+		}
+		return nil, errors.New("tmux failed")
+	}))
+
+	_, err := client.RecentSessionSummaries(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "list tmux panes") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

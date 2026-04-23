@@ -97,6 +97,16 @@ type PopupOptions struct {
 	CloseBehavior PopupCloseBehavior
 }
 
+// RecentSessionSummary describes one recent tmux session with lightweight row
+// metadata for session pickers.
+type RecentSessionSummary struct {
+	Name      string
+	Attached  bool
+	PaneCount int
+	Path      string
+	Activity  int64
+}
+
 // NewClient builds a tmux client over the provided runner.
 func NewClient(runner commandRunner) *Client {
 	return newClientWithEnv(runner, os.Getenv)
@@ -141,12 +151,51 @@ func (c *Client) CurrentSessionName(ctx context.Context) (string, error) {
 
 // RecentSessions lists tmux session names ordered by most-recent activity first.
 func (c *Client) RecentSessions(ctx context.Context) ([]string, error) {
-	output, err := c.runner.Run(ctx, "tmux", "list-sessions", "-F", "#{session_activity}\t#{session_name}")
+	output, err := c.runner.Run(ctx, "tmux", "list-sessions", "-F", "#{session_activity}\t#{session_name}\t#{session_attached}")
 	if err != nil {
 		return nil, fmt.Errorf("list recent tmux sessions: %w", err)
 	}
 
 	return parseRecentSessions(output)
+}
+
+// RecentSessionSummaries lists tmux session rows ordered by most-recent
+// activity first, enriched with attachment and pane metadata.
+func (c *Client) RecentSessionSummaries(ctx context.Context) ([]RecentSessionSummary, error) {
+	output, err := c.runner.Run(ctx, "tmux", "list-sessions", "-F", "#{session_activity}\t#{session_name}\t#{session_attached}")
+	if err != nil {
+		return nil, fmt.Errorf("list recent tmux sessions: %w", err)
+	}
+
+	rows, err := parseRecentSessionRows(output)
+	if err != nil {
+		return nil, fmt.Errorf("list recent tmux sessions: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+
+	panes, err := c.ListAllPanes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	bySession := summarizePanesBySession(panes)
+	summaries := make([]RecentSessionSummary, 0, len(rows))
+	for _, row := range rows {
+		summary := RecentSessionSummary{
+			Name:     row.name,
+			Attached: row.attached,
+			Activity: row.activity,
+		}
+		if paneSummary, ok := bySession[row.name]; ok {
+			summary.PaneCount = paneSummary.paneCount
+			summary.Path = paneSummary.path
+		}
+		summaries = append(summaries, summary)
+	}
+
+	return summaries, nil
 }
 
 // ListEphemeralSessions lists tmux sessions with the lifecycle metadata needed
@@ -665,11 +714,12 @@ func resolvePopupOptions(options PopupOptions) (PopupOptions, error) {
 
 type recentSession struct {
 	name     string
+	attached bool
 	activity int64
 	order    int
 }
 
-func parseRecentSessions(output []byte) ([]string, error) {
+func parseRecentSessionRows(output []byte) ([]recentSession, error) {
 	if strings.TrimSpace(string(output)) == "" {
 		return nil, nil
 	}
@@ -681,14 +731,18 @@ func parseRecentSessions(output []byte) ([]string, error) {
 			continue
 		}
 
-		fields := strings.SplitN(rawLine, "\t", 2)
-		if len(fields) != 2 {
+		fields := strings.SplitN(rawLine, "\t", 3)
+		if len(fields) != 3 {
 			return nil, fmt.Errorf("parse recent tmux sessions: malformed row %q", rawLine)
 		}
 
 		activity, err := strconv.ParseInt(strings.TrimSpace(fields[0]), 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("parse recent tmux sessions for %q: %w", strings.TrimSpace(fields[1]), errSessionActivityInvalid)
+		}
+		attached, err := parseBinaryFlag(fields[2], errSessionAttachedInvalid)
+		if err != nil {
+			return nil, fmt.Errorf("parse recent tmux sessions for %q: %w", strings.TrimSpace(fields[1]), err)
 		}
 
 		sessionName := strings.TrimSpace(fields[1])
@@ -698,6 +752,7 @@ func parseRecentSessions(output []byte) ([]string, error) {
 
 		sessions = append(sessions, recentSession{
 			name:     sessionName,
+			attached: attached,
 			activity: activity,
 			order:    index,
 		})
@@ -710,12 +765,50 @@ func parseRecentSessions(output []byte) ([]string, error) {
 		return sessions[i].activity > sessions[j].activity
 	})
 
-	names := make([]string, 0, len(sessions))
-	for _, session := range sessions {
+	return sessions, nil
+}
+
+func parseRecentSessions(output []byte) ([]string, error) {
+	rows, err := parseRecentSessionRows(output)
+	if err != nil {
+		return nil, err
+	}
+
+	names := make([]string, 0, len(rows))
+	for _, session := range rows {
 		names = append(names, session.name)
 	}
 
 	return names, nil
+}
+
+type paneSessionSummary struct {
+	paneCount int
+	path      string
+}
+
+func summarizePanesBySession(panes []Pane) map[string]paneSessionSummary {
+	bySession := make(map[string]paneSessionSummary, len(panes))
+	for _, pane := range panes {
+		name := strings.TrimSpace(pane.SessionName)
+		if name == "" {
+			continue
+		}
+
+		summary := bySession[name]
+		summary.paneCount++
+
+		path := strings.TrimSpace(pane.Path)
+		if pane.Active && path != "" {
+			summary.path = path
+		} else if summary.path == "" && path != "" {
+			summary.path = path
+		}
+
+		bySession[name] = summary
+	}
+
+	return bySession
 }
 
 func parseSessionWindows(output []byte) ([]Window, error) {
