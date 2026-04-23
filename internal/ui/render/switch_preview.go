@@ -23,6 +23,12 @@ func RenderSwitchPreview(model corepreview.SwitchReadModel) string {
 	builder.WriteString(sanitizeCell(model.SessionMode))
 	builder.WriteString("\n")
 
+	if branch := sanitizeCell(model.GitBranch); branch != "" {
+		builder.WriteString("git: ")
+		builder.WriteString(branch)
+		builder.WriteString("\n")
+	}
+
 	builder.WriteString("summary: ")
 	builder.WriteString(formatPopupSummary(model.Popup))
 	builder.WriteString("\n")

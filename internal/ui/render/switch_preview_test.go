@@ -14,6 +14,7 @@ func TestRenderSwitchPreviewForExistingSession(t *testing.T) {
 		DisplayPath: "~rp/app",
 		SessionName: "app",
 		SessionMode: "existing",
+		GitBranch:   "main",
 		Popup: corepreview.PopupReadModel{
 			HasSelection:        true,
 			SelectedWindowIndex: "2",
@@ -33,6 +34,7 @@ func TestRenderSwitchPreviewForExistingSession(t *testing.T) {
 		"dir: ~rp/app\n" +
 		"session: app\n" +
 		"state: existing\n" +
+		"git: main\n" +
 		"summary: 2w  2p  w2.p1\n" +
 		"selected: w2.p1\n" +
 		"windows:\n" +

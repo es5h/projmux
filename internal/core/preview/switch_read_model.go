@@ -8,6 +8,7 @@ type SwitchReadModel struct {
 	DisplayPath string
 	SessionName string
 	SessionMode string
+	GitBranch   string
 	Popup       PopupReadModel
 }
 
@@ -18,6 +19,7 @@ type SwitchReadModelInputs struct {
 	DisplayPath        string
 	SessionName        string
 	SessionExists      bool
+	GitBranch          string
 	StoredSelection    Selection
 	HasStoredSelection bool
 	Windows            []Window
@@ -32,6 +34,7 @@ func BuildSwitchReadModel(inputs SwitchReadModelInputs) SwitchReadModel {
 		DisplayPath: strings.TrimSpace(inputs.DisplayPath),
 		SessionName: strings.TrimSpace(inputs.SessionName),
 		SessionMode: "new",
+		GitBranch:   strings.TrimSpace(inputs.GitBranch),
 	}
 
 	if !inputs.SessionExists {

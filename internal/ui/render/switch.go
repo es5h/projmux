@@ -5,6 +5,16 @@ import (
 	"strings"
 )
 
+const (
+	ansiReset  = "\x1b[0m"
+	ansiBold   = "\x1b[1m"
+	ansiDim    = "\x1b[2m"
+	ansiRed    = "\x1b[31m"
+	ansiGreen  = "\x1b[32m"
+	ansiYellow = "\x1b[33m"
+	ansiCyan   = "\x1b[36m"
+)
+
 type SwitchRow struct {
 	Label string
 	Value string
@@ -15,6 +25,9 @@ type SwitchCandidate struct {
 	DisplayPath string
 	SessionName string
 	ModeLabel   string
+	UI          string
+	Pinned      bool
+	Tagged      bool
 }
 
 func PrettyPath(path, homeDir, repoRoot string) string {
@@ -60,6 +73,13 @@ func BuildSwitchRows(candidates []SwitchCandidate) []SwitchRow {
 }
 
 func formatSwitchLabel(candidate SwitchCandidate) string {
+	if candidate.Path == "__projmux_settings__" {
+		return formatSettingsLabel(candidate)
+	}
+	if candidate.UI == "sidebar" {
+		return formatSidebarSwitchLabel(candidate)
+	}
+
 	parts := make([]string, 0, 3)
 
 	sessionName := sanitizeCell(candidate.SessionName)
@@ -81,6 +101,65 @@ func formatSwitchLabel(candidate SwitchCandidate) string {
 	}
 
 	return strings.Join(parts, "  ")
+}
+
+func formatSettingsLabel(candidate SwitchCandidate) string {
+	label := sanitizeCell(candidate.DisplayPath)
+	if label == "" {
+		label = "Settings"
+	}
+	if candidate.UI != "sidebar" {
+		return label
+	}
+	description := "manage pinned directories"
+	return "  " + ansiBold + ansiCyan + label + ansiReset + "  " + ansiDim + description + ansiReset
+}
+
+func formatSidebarSwitchLabel(candidate SwitchCandidate) string {
+	parts := make([]string, 0, 4)
+	parts = append(parts, formatTagBadge(candidate.Tagged))
+	parts = append(parts, formatPinBadge(candidate.Pinned))
+
+	sessionName := sanitizeCell(candidate.SessionName)
+	if sessionName != "" {
+		parts = append(parts, formatSidebarSessionName(sessionName, candidate.ModeLabel))
+	}
+
+	path := sanitizeCell(candidate.DisplayPath)
+	if path == "" {
+		path = sanitizeCell(candidate.Path)
+	}
+	if path != "" {
+		parts = append(parts, ansiDim+path+ansiReset)
+	}
+
+	return strings.Join(parts, " ")
+}
+
+func formatSidebarSessionName(sessionName, mode string) string {
+	mode = sanitizeCell(mode)
+	switch mode {
+	case "existing":
+		return ansiBold + ansiGreen + sessionName + ansiReset
+	case "new":
+		return ansiYellow + sessionName + ansiReset
+	default:
+		return sessionName
+	}
+}
+
+func formatTagBadge(tagged bool) string {
+	if tagged {
+		return ansiRed + "x" + ansiReset
+	}
+	return " "
+}
+
+func formatPinBadge(pinned bool) string {
+	if pinned {
+		return ansiYellow + "*" + ansiReset
+	}
+	return " "
 }
 
 func sanitizeCell(value string) string {

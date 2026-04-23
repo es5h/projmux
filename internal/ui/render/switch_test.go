@@ -10,6 +10,7 @@ func TestBuildSwitchRowsFormatsSessionModeAndPath(t *testing.T) {
 		DisplayPath: "~/dotfiles",
 		SessionName: "dotfiles",
 		ModeLabel:   "existing",
+		UI:          "popup",
 	}})
 
 	if len(rows) != 1 {
@@ -29,6 +30,7 @@ func TestBuildSwitchRowsOmitsBlankMode(t *testing.T) {
 	rows := BuildSwitchRows([]SwitchCandidate{{
 		Path:        "/tmp/app",
 		SessionName: "tmp-app",
+		UI:          "popup",
 	}})
 
 	if got, want := rows[0].Label, "tmp-app  /tmp/app"; got != want {
@@ -59,9 +61,44 @@ func TestBuildSwitchRowsSanitizesTabsAndNewlines(t *testing.T) {
 		Path:        "/tmp/app\tone",
 		SessionName: "tmp\napp",
 		ModeLabel:   "new\tstate",
+		UI:          "popup",
 	}})
 
 	if got, want := rows[0].Label, "tmp app  [new state]  /tmp/app one"; got != want {
+		t.Fatalf("label = %q, want %q", got, want)
+	}
+}
+
+func TestBuildSwitchRowsSidebarUsesAnsiStylingForModeAndToggles(t *testing.T) {
+	t.Parallel()
+
+	rows := BuildSwitchRows([]SwitchCandidate{{
+		Path:        "/home/tester/source/repos/app",
+		DisplayPath: "~rp/app",
+		SessionName: "app",
+		ModeLabel:   "existing",
+		UI:          "sidebar",
+		Pinned:      true,
+		Tagged:      true,
+	}})
+
+	const want = "\x1b[31mx\x1b[0m \x1b[33m*\x1b[0m \x1b[1m\x1b[32mapp\x1b[0m \x1b[2m~rp/app\x1b[0m"
+	if got := rows[0].Label; got != want {
+		t.Fatalf("label = %q, want %q", got, want)
+	}
+}
+
+func TestBuildSwitchRowsSidebarFormatsSettingsRow(t *testing.T) {
+	t.Parallel()
+
+	rows := BuildSwitchRows([]SwitchCandidate{{
+		Path:        "__projmux_settings__",
+		DisplayPath: "Settings",
+		UI:          "sidebar",
+	}})
+
+	const want = "  \x1b[1m\x1b[36mSettings\x1b[0m  \x1b[2mmanage pinned directories\x1b[0m"
+	if got := rows[0].Label; got != want {
 		t.Fatalf("label = %q, want %q", got, want)
 	}
 }

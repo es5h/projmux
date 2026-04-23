@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -46,6 +47,7 @@ type switchPinStore interface {
 type switchPinStoreFactory func() (switchPinStore, error)
 
 type switchTagStore interface {
+	List() ([]string, error)
 	Toggle(name string) (bool, error)
 }
 
@@ -87,12 +89,14 @@ type switchCommand struct {
 	homeDir         func() (string, error)
 	workingDir      func() (string, error)
 	lookupEnv       func(string) string
+	gitBranch       func(string) string
 }
 
 type switchPlan struct {
 	UI            string
 	Candidates    []string
 	Rows          []intfzf.Entry
+	SessionNames  map[string]string
 	Action        string
 	Selection     string
 	SessionName   string
@@ -120,6 +124,7 @@ func newSwitchCommand() *switchCommand {
 		homeDir:     os.UserHomeDir,
 		workingDir:  os.Getwd,
 		lookupEnv:   os.Getenv,
+		gitBranch:   detectGitBranch,
 	}
 	if pathsErr != nil {
 		cmd.previewStoreErr = fmt.Errorf("resolve default config paths: %w", pathsErr)
@@ -612,6 +617,7 @@ func (c *switchCommand) previewModel(ctx context.Context, target string) (corepr
 		Path:        target,
 		DisplayPath: intrender.PrettyPath(target, homeDir, repoRoot),
 		SessionName: sessionName,
+		GitBranch:   c.resolveGitBranch(target),
 	}
 
 	exists, err := c.switchSessionExists(ctx, sessionName)
@@ -896,11 +902,12 @@ func (c *switchCommand) completePlan(plan switchPlan) (switchPlan, error) {
 		return switchPlan{}, fmt.Errorf("switch session identity resolver is not configured")
 	}
 
-	rows, err := c.renderRows(context.Background(), plan.Candidates)
+	rows, sessionNames, err := c.renderRows(context.Background(), plan.UI, plan.Candidates)
 	if err != nil {
 		return switchPlan{}, err
 	}
 	plan.Rows = rows
+	plan.SessionNames = sessionNames
 
 	result, err := c.runPicker(plan)
 	if err != nil {
@@ -1160,17 +1167,10 @@ func switchSidebarInitialPos(plan switchPlan) int {
 }
 
 func switchSessionNameForRow(plan switchPlan, value string) string {
-	for _, entry := range plan.Rows {
-		if cleanOptionalPath(entry.Value) == value {
-			label := strings.TrimSpace(entry.Label)
-			if label == "" || label == "Settings" {
-				return ""
-			}
-			name, _, _ := strings.Cut(label, "  [")
-			return strings.TrimSpace(name)
-		}
+	if plan.SessionNames == nil {
+		return ""
 	}
-	return ""
+	return strings.TrimSpace(plan.SessionNames[cleanOptionalPath(value)])
 }
 
 func (c *switchCommand) toggleTag(target string, stdout io.Writer) error {
@@ -1240,31 +1240,42 @@ func (c *switchCommand) addPin(target string, stdout io.Writer) error {
 	return err
 }
 
-func (c *switchCommand) renderRows(ctx context.Context, candidatePaths []string) ([]intfzf.Entry, error) {
+func (c *switchCommand) renderRows(ctx context.Context, ui string, candidatePaths []string) ([]intfzf.Entry, map[string]string, error) {
 	renderCandidates := make([]intrender.SwitchCandidate, 0, len(candidatePaths))
 	existingBySession, err := c.lookupExistingSessions(ctx, candidatePaths)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	homeDir, err := c.resolveHomeDir()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	repoRoot := cleanOptionalPath(c.env(repoRootEnvVar))
+	pinnedSet, err := c.loadPinnedSet()
+	if err != nil {
+		return nil, nil, err
+	}
+	taggedSet, err := c.loadTaggedSet()
+	if err != nil {
+		return nil, nil, err
+	}
+	sessionNames := make(map[string]string, len(candidatePaths))
 
 	for _, candidatePath := range candidatePaths {
 		if candidatePath == switchSettingsSentinel {
 			renderCandidates = append(renderCandidates, intrender.SwitchCandidate{
 				Path:        candidatePath,
 				DisplayPath: "Settings",
+				UI:          ui,
 			})
 			continue
 		}
 
 		sessionName, err := c.identity.SessionIdentityForPath(candidatePath)
 		if err != nil {
-			return nil, fmt.Errorf("render switch rows: resolve session identity for %q: %w", candidatePath, err)
+			return nil, nil, fmt.Errorf("render switch rows: resolve session identity for %q: %w", candidatePath, err)
 		}
+		sessionNames[cleanOptionalPath(candidatePath)] = sessionName
 
 		modeLabel := ""
 		if exists, ok := existingBySession[sessionName]; ok {
@@ -1280,6 +1291,9 @@ func (c *switchCommand) renderRows(ctx context.Context, candidatePaths []string)
 			DisplayPath: intrender.PrettyPath(candidatePath, homeDir, repoRoot),
 			SessionName: sessionName,
 			ModeLabel:   modeLabel,
+			UI:          ui,
+			Pinned:      pinnedSet[cleanOptionalPath(candidatePath)],
+			Tagged:      taggedSet[cleanOptionalPath(candidatePath)],
 		})
 	}
 
@@ -1292,7 +1306,38 @@ func (c *switchCommand) renderRows(ctx context.Context, candidatePaths []string)
 		})
 	}
 
-	return entries, nil
+	return entries, sessionNames, nil
+}
+
+func (c *switchCommand) loadPinnedSet() (map[string]bool, error) {
+	pins, err := c.loadPins()
+	if err != nil {
+		return nil, err
+	}
+	set := make(map[string]bool, len(pins))
+	for _, pin := range pins {
+		set[cleanOptionalPath(pin)] = true
+	}
+	return set, nil
+}
+
+func (c *switchCommand) loadTaggedSet() (map[string]bool, error) {
+	if c.tagStore == nil {
+		return map[string]bool{}, nil
+	}
+	store, err := c.loadTagStore()
+	if err != nil {
+		return nil, err
+	}
+	items, err := store.List()
+	if err != nil {
+		return nil, fmt.Errorf("load switch tags: %w", err)
+	}
+	set := make(map[string]bool, len(items))
+	for _, item := range items {
+		set[cleanOptionalPath(item)] = true
+	}
+	return set, nil
 }
 
 func (c *switchCommand) lookupExistingSessions(ctx context.Context, candidatePaths []string) (map[string]bool, error) {
@@ -1457,6 +1502,30 @@ func (c *switchCommand) writeSettingsPreview(stdout io.Writer) error {
 
 	_, err = io.WriteString(stdout, builder.String())
 	return err
+}
+
+func (c *switchCommand) resolveGitBranch(path string) string {
+	if c.gitBranch == nil {
+		return ""
+	}
+	return strings.TrimSpace(c.gitBranch(path))
+}
+
+func detectGitBranch(path string) string {
+	path = cleanOptionalPath(path)
+	if path == "" {
+		return ""
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		return ""
+	}
+	if output, err := exec.Command("git", "-C", path, "symbolic-ref", "--quiet", "--short", "HEAD").CombinedOutput(); err == nil {
+		return strings.TrimSpace(string(output))
+	}
+	if output, err := exec.Command("git", "-C", path, "rev-parse", "--short", "HEAD").CombinedOutput(); err == nil {
+		return strings.TrimSpace(string(output))
+	}
+	return ""
 }
 
 func (c *switchCommand) clearPins() error {

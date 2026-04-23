@@ -179,8 +179,8 @@ func TestSwitchCommandSupportsSidebarUI(t *testing.T) {
 		t.Fatalf("runner bindings = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Entries, []intfzf.Entry{
-		{Label: "tmp-app  [new]  /tmp/app", Value: "/tmp/app"},
-		{Label: "Settings", Value: switchSettingsSentinel},
+		{Label: "    \x1b[33mtmp-app\x1b[0m \x1b[2m/tmp/app\x1b[0m", Value: "/tmp/app"},
+		{Label: "  \x1b[1m\x1b[36mSettings\x1b[0m  \x1b[2mmanage pinned directories\x1b[0m", Value: switchSettingsSentinel},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
 	}
@@ -355,13 +355,13 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 		t.Fatalf("runner candidates = %q, want %q", got, wantCandidates)
 	}
 	wantEntries := []intfzf.Entry{
-		{Label: "home  [new]  ~", Value: fixture.path("home")},
-		{Label: "dotfiles  [new]  ~/dotfiles", Value: fixture.path("home/dotfiles")},
-		{Label: "pins-app  [new]  " + fixture.path("pins/app"), Value: fixture.path("pins/app")},
-		{Label: "managed-work-a  [new]  " + fixture.path("managed/work-a"), Value: fixture.path("managed/work-a")},
-		{Label: "rp-repo-a  [new]  ~rp/repo-a", Value: fixture.path("rp/repo-a")},
-		{Label: "managed-work-b  [new]  " + fixture.path("managed/work-b"), Value: fixture.path("managed/work-b")},
-		{Label: "Settings", Value: switchSettingsSentinel},
+		{Label: "    \x1b[33mhome\x1b[0m \x1b[2m~\x1b[0m", Value: fixture.path("home")},
+		{Label: "    \x1b[33mdotfiles\x1b[0m \x1b[2m~/dotfiles\x1b[0m", Value: fixture.path("home/dotfiles")},
+		{Label: "  \x1b[33m*\x1b[0m \x1b[33mpins-app\x1b[0m \x1b[2m" + fixture.path("pins/app") + "\x1b[0m", Value: fixture.path("pins/app")},
+		{Label: "    \x1b[33mmanaged-work-a\x1b[0m \x1b[2m" + fixture.path("managed/work-a") + "\x1b[0m", Value: fixture.path("managed/work-a")},
+		{Label: "    \x1b[33mrp-repo-a\x1b[0m \x1b[2m~rp/repo-a\x1b[0m", Value: fixture.path("rp/repo-a")},
+		{Label: "    \x1b[33mmanaged-work-b\x1b[0m \x1b[2m" + fixture.path("managed/work-b") + "\x1b[0m", Value: fixture.path("managed/work-b")},
+		{Label: "  \x1b[1m\x1b[36mSettings\x1b[0m  \x1b[2mmanage pinned directories\x1b[0m", Value: switchSettingsSentinel},
 	}
 	if got := fakeRunner.last.Entries; !equalEntries(got, wantEntries) {
 		t.Fatalf("runner entries = %#v, want %#v", got, wantEntries)
@@ -667,6 +667,7 @@ func TestSwitchCommandPreviewRendersExistingSessionContext(t *testing.T) {
 		sessions:     &capturingSwitchSessionExecutor{exists: map[string]bool{"repo-a": true}},
 		previewStore: store,
 		inventory:    inventory,
+		gitBranch:    func(string) string { return "main" },
 		identity:     stubSwitchIdentityResolver{name: "repo-a"},
 		validate:     validateDirectory,
 		homeDir:      func() (string, error) { return fixture.path("home"), nil },
@@ -688,6 +689,7 @@ func TestSwitchCommandPreviewRendersExistingSessionContext(t *testing.T) {
 		"dir: ~rp/repo-a\n" +
 		"session: repo-a\n" +
 		"state: existing\n" +
+		"git: main\n" +
 		"summary: 2w  2p  w2.p1\n" +
 		"selected: w2.p1\n" +
 		"windows:\n" +
@@ -1452,7 +1454,15 @@ func (s *stubSwitchPinStore) Clear() error {
 type capturingSwitchTagStore struct {
 	calls  []string
 	tagged bool
+	list   []string
 	err    error
+}
+
+func (s *capturingSwitchTagStore) List() ([]string, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return append([]string(nil), s.list...), nil
 }
 
 func (s *capturingSwitchTagStore) Toggle(name string) (bool, error) {
