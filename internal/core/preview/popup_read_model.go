@@ -5,6 +5,8 @@ import "strings"
 // PopupReadModel captures the derived preview state for a selected session.
 type PopupReadModel struct {
 	SessionName         string
+	WindowCount         int
+	TotalPaneCount      int
 	HasSelection        bool
 	SelectedWindowIndex string
 	SelectedPaneIndex   string
@@ -28,8 +30,10 @@ func BuildPopupReadModel(inputs PopupReadModelInputs) PopupReadModel {
 	allPanes := normalizedPanes(inputs.Panes)
 
 	model := PopupReadModel{
-		SessionName: strings.TrimSpace(inputs.SessionName),
-		Windows:     windows,
+		SessionName:    strings.TrimSpace(inputs.SessionName),
+		WindowCount:    len(windows),
+		TotalPaneCount: len(allPanes),
+		Windows:        windows,
 	}
 	if len(windows) == 0 {
 		return model

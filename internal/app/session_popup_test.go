@@ -57,7 +57,8 @@ func TestAppRunSessionPopupPreview(t *testing.T) {
 
 	const wantOutput = "" +
 		"session: dev\n" +
-		"selected: window=3 pane=8\n" +
+		"summary: 2w  3p  w3.p8\n" +
+		"selected: w3.p8\n" +
 		"windows:\n" +
 		"    2 | shell | 1 panes | ~/\n" +
 		"  * 3 | dev | 2 panes | ~rp/dev\n" +
@@ -123,7 +124,8 @@ func TestAppRunSessionPopupCyclePane(t *testing.T) {
 	}
 	const wantOutput = "" +
 		"session: dev\n" +
-		"selected: window=3 pane=8\n" +
+		"summary: 2w  3p  w3.p8\n" +
+		"selected: w3.p8\n" +
 		"windows:\n" +
 		"    2 | shell | 1 panes | ~/\n" +
 		"  * 3 | dev | 2 panes | ~rp/dev\n" +
@@ -189,7 +191,8 @@ func TestAppRunSessionPopupCycleWindow(t *testing.T) {
 	}
 	const wantOutput = "" +
 		"session: dev\n" +
-		"selected: window=4 pane=0\n" +
+		"summary: 2w  2p  w4.p0\n" +
+		"selected: w4.p0\n" +
 		"windows:\n" +
 		"    3 | dev | 1 panes | ~rp/dev\n" +
 		"  * 4 | logs | 1 panes | ~rp/dev\n" +
@@ -257,6 +260,7 @@ func TestSessionPopupPreviewReportsNoSelectionModel(t *testing.T) {
 
 	const wantOutput = "" +
 		"session: dev\n" +
+		"summary: 0w  1p\n" +
 		"selected: none\n" +
 		"windows:\n" +
 		"  (none)\n" +

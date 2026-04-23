@@ -33,7 +33,8 @@ func TestRenderSwitchPreviewForExistingSession(t *testing.T) {
 		"dir: ~rp/app\n" +
 		"session: app\n" +
 		"state: existing\n" +
-		"selected: window=2 pane=1\n" +
+		"summary: 2w  2p  w2.p1\n" +
+		"selected: w2.p1\n" +
 		"windows:\n" +
 		"    1 | shell | 1 panes | ~/\n" +
 		"  * 2 | app | 2 panes | ~rp/app\n" +
@@ -58,6 +59,7 @@ func TestRenderSwitchPreviewForNewSessionShowsEmptyInventory(t *testing.T) {
 		"dir: /tmp/app\n" +
 		"session: tmp-app\n" +
 		"state: new\n" +
+		"summary: 0w  0p\n" +
 		"selected: none\n" +
 		"windows:\n" +
 		"  (none)\n" +

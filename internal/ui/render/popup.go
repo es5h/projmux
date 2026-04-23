@@ -16,6 +16,10 @@ func RenderPopupPreview(model preview.PopupReadModel) string {
 	builder.WriteString(sanitizeCell(model.SessionName))
 	builder.WriteString("\n")
 
+	builder.WriteString("summary: ")
+	builder.WriteString(formatPopupSummary(model))
+	builder.WriteString("\n")
+
 	builder.WriteString("selected: ")
 	builder.WriteString(formatSelectedSummary(model))
 	builder.WriteString("\n")
@@ -29,22 +33,42 @@ func RenderPopupPreview(model preview.PopupReadModel) string {
 	return builder.String()
 }
 
+func formatPopupSummary(model preview.PopupReadModel) string {
+	var parts []string
+	windowCount := model.WindowCount
+	if windowCount == 0 {
+		windowCount = len(model.Windows)
+	}
+	totalPaneCount := model.TotalPaneCount
+	if totalPaneCount == 0 {
+		totalPaneCount = len(model.Panes)
+	}
+	parts = append(parts, sanitizeCell(strconv.Itoa(windowCount))+"w")
+	parts = append(parts, sanitizeCell(strconv.Itoa(totalPaneCount))+"p")
+	if target := formatTargetSummary(model.SelectedWindowIndex, model.SelectedPaneIndex); target != "" {
+		parts = append(parts, target)
+	}
+	return strings.Join(parts, "  ")
+}
+
 func formatSelectedSummary(model preview.PopupReadModel) string {
 	if !model.HasSelection {
 		return "none"
 	}
 
-	var builder strings.Builder
-	builder.WriteString("window=")
-	builder.WriteString(sanitizeCell(model.SelectedWindowIndex))
-	builder.WriteString(" pane=")
-	if strings.TrimSpace(model.SelectedPaneIndex) == "" {
-		builder.WriteString("-")
-		return builder.String()
-	}
+	return formatTargetSummary(model.SelectedWindowIndex, model.SelectedPaneIndex)
+}
 
-	builder.WriteString(sanitizeCell(model.SelectedPaneIndex))
-	return builder.String()
+func formatTargetSummary(windowIndex, paneIndex string) string {
+	windowIndex = strings.TrimSpace(windowIndex)
+	paneIndex = strings.TrimSpace(paneIndex)
+	if windowIndex == "" {
+		return ""
+	}
+	if paneIndex == "" {
+		return "w" + sanitizeCell(windowIndex)
+	}
+	return "w" + sanitizeCell(windowIndex) + ".p" + sanitizeCell(paneIndex)
 }
 
 func writeWindows(builder *strings.Builder, model preview.PopupReadModel) {

@@ -26,7 +26,8 @@ func TestRenderPopupPreviewWithSelectedWindowAndPane(t *testing.T) {
 
 	want := "" +
 		"session: app\n" +
-		"selected: window=2 pane=4\n" +
+		"summary: 2w  2p  w2.p4\n" +
+		"selected: w2.p4\n" +
 		"windows:\n" +
 		"    1 | shell | 1 panes | ~/\n" +
 		"  * 2 | app | 2 panes | ~rp/app\n" +
@@ -52,7 +53,8 @@ func TestRenderPopupPreviewWithWindowOnlySelection(t *testing.T) {
 
 	want := "" +
 		"session: app\n" +
-		"selected: window=5 pane=-\n" +
+		"summary: 1w  0p  w5\n" +
+		"selected: w5\n" +
 		"windows:\n" +
 		"  * 5 | build | 1 panes | ~rp/build\n" +
 		"panes:\n" +
@@ -77,6 +79,7 @@ func TestRenderPopupPreviewWithoutSelectionSanitizesOutput(t *testing.T) {
 
 	want := "" +
 		"session: app one preview\n" +
+		"summary: 1w  1p\n" +
 		"selected: none\n" +
 		"windows:\n" +
 		"    1 2 | main pane | 2 panes | /tmp/app one\n" +

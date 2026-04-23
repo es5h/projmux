@@ -21,6 +21,12 @@ func TestBuildPopupReadModelFallsBackToActiveSelectionWhenStoreMissing(t *testin
 	if model.SessionName != "app" {
 		t.Fatalf("SessionName = %q, want app", model.SessionName)
 	}
+	if model.WindowCount != 2 {
+		t.Fatalf("WindowCount = %d, want 2", model.WindowCount)
+	}
+	if model.TotalPaneCount != 3 {
+		t.Fatalf("TotalPaneCount = %d, want 3", model.TotalPaneCount)
+	}
 	if !model.HasSelection {
 		t.Fatal("HasSelection = false, want true")
 	}
@@ -59,6 +65,12 @@ func TestBuildPopupReadModelUsesStoredSelectionWhenAvailable(t *testing.T) {
 
 	if !model.HasSelection {
 		t.Fatal("HasSelection = false, want true")
+	}
+	if model.WindowCount != 2 {
+		t.Fatalf("WindowCount = %d, want 2", model.WindowCount)
+	}
+	if model.TotalPaneCount != 3 {
+		t.Fatalf("TotalPaneCount = %d, want 3", model.TotalPaneCount)
 	}
 	if model.SelectedWindowIndex != "3" {
 		t.Fatalf("SelectedWindowIndex = %q, want 3", model.SelectedWindowIndex)
@@ -147,6 +159,12 @@ func TestBuildPopupReadModelReturnsNoSelectionWhenNoWindowsExist(t *testing.T) {
 
 	if model.HasSelection {
 		t.Fatal("HasSelection = true, want false")
+	}
+	if model.WindowCount != 0 {
+		t.Fatalf("WindowCount = %d, want 0", model.WindowCount)
+	}
+	if model.TotalPaneCount != 1 {
+		t.Fatalf("TotalPaneCount = %d, want 1", model.TotalPaneCount)
 	}
 	if model.SelectedWindowIndex != "" {
 		t.Fatalf("SelectedWindowIndex = %q, want empty", model.SelectedWindowIndex)

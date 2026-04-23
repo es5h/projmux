@@ -606,7 +606,8 @@ func TestSwitchCommandPreviewRendersExistingSessionContext(t *testing.T) {
 		"dir: ~rp/repo-a\n" +
 		"session: repo-a\n" +
 		"state: existing\n" +
-		"selected: window=2 pane=1\n" +
+		"summary: 2w  2p  w2.p1\n" +
+		"selected: w2.p1\n" +
 		"windows:\n" +
 		"    1\n" +
 		"  * 2\n" +
@@ -658,6 +659,7 @@ func TestSwitchCommandPreviewRendersNewSessionContextWithoutInventory(t *testing
 		"dir: ~rp/repo-a\n" +
 		"session: repo-a\n" +
 		"state: new\n" +
+		"summary: 0w  0p\n" +
 		"selected: none\n" +
 		"windows:\n" +
 		"  (none)\n" +
