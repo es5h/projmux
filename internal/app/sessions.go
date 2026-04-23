@@ -5,7 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 
+	corepreview "github.com/es5h/projmux/internal/core/preview"
 	inttmux "github.com/es5h/projmux/internal/integrations/tmux"
 	intfzf "github.com/es5h/projmux/internal/ui/fzf"
 	intrender "github.com/es5h/projmux/internal/ui/render"
@@ -15,8 +18,12 @@ type sessionsRecentResolver interface {
 	RecentSessions(ctx context.Context) ([]string, error)
 }
 
+type sessionsSelectionStore interface {
+	ReadSelection(sessionName string) (selection corepreview.Selection, found bool, err error)
+}
+
 type sessionsOpener interface {
-	OpenSession(ctx context.Context, sessionName string) error
+	OpenSessionTarget(ctx context.Context, sessionName, windowIndex, paneIndex string) error
 }
 
 type sessionsRunner interface {
@@ -24,17 +31,21 @@ type sessionsRunner interface {
 }
 
 type sessionsCommand struct {
-	recent sessionsRecentResolver
-	opener sessionsOpener
-	runner sessionsRunner
+	recent     sessionsRecentResolver
+	store      sessionsSelectionStore
+	opener     sessionsOpener
+	runner     sessionsRunner
+	executable func() (string, error)
 }
 
 func newSessionsCommand() *sessionsCommand {
 	client := inttmux.NewClient(inttmux.ExecRunner{})
 	return &sessionsCommand{
-		recent: client,
-		opener: client,
-		runner: intfzf.NewRunner(),
+		recent:     client,
+		store:      newSessionPopupCommand().store,
+		opener:     client,
+		runner:     intfzf.NewRunner(),
+		executable: os.Executable,
 	}
 }
 
@@ -74,10 +85,49 @@ func (c *sessionsCommand) Run(args []string, stdout, stderr io.Writer) error {
 	if c.runner == nil {
 		return fmt.Errorf("sessions runner is not configured")
 	}
+	if c.executable == nil {
+		return fmt.Errorf("sessions executable resolver is not configured")
+	}
+
+	binaryPath, err := c.executable()
+	if err != nil {
+		return fmt.Errorf("resolve sessions executable: %w", err)
+	}
+
+	previewCommand, err := inttmux.BuildSessionPopupPreviewCommand(binaryPath)
+	if err != nil {
+		return fmt.Errorf("build sessions preview command: %w", err)
+	}
+
+	cycleWindowPrev, err := inttmux.BuildSessionPopupCycleCommand(binaryPath, "cycle-window", "prev")
+	if err != nil {
+		return fmt.Errorf("build sessions cycle-window prev command: %w", err)
+	}
+	cycleWindowNext, err := inttmux.BuildSessionPopupCycleCommand(binaryPath, "cycle-window", "next")
+	if err != nil {
+		return fmt.Errorf("build sessions cycle-window next command: %w", err)
+	}
+	cyclePanePrev, err := inttmux.BuildSessionPopupCycleCommand(binaryPath, "cycle-pane", "prev")
+	if err != nil {
+		return fmt.Errorf("build sessions cycle-pane prev command: %w", err)
+	}
+	cyclePaneNext, err := inttmux.BuildSessionPopupCycleCommand(binaryPath, "cycle-pane", "next")
+	if err != nil {
+		return fmt.Errorf("build sessions cycle-pane next command: %w", err)
+	}
+
 	rows := intrender.BuildSessionRows(sessionNames)
 	result, err := c.runner.Run(intfzf.Options{
-		UI:      *ui,
-		Entries: rowsToEntries(rows),
+		UI:             *ui,
+		Entries:        rowsToEntries(rows),
+		PreviewCommand: previewCommand,
+		PreviewWindow:  sessionsPreviewWindow(*ui),
+		Bindings: []string{
+			"left:execute-silent(" + cycleWindowPrev + ")+refresh-preview",
+			"right:execute-silent(" + cycleWindowNext + ")+refresh-preview",
+			"alt-up:execute-silent(" + cyclePanePrev + ")+refresh-preview",
+			"alt-down:execute-silent(" + cyclePaneNext + ")+refresh-preview",
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("run sessions picker: %w", err)
@@ -89,11 +139,38 @@ func (c *sessionsCommand) Run(args []string, stdout, stderr io.Writer) error {
 	if c.opener == nil {
 		return fmt.Errorf("sessions opener is not configured")
 	}
-	if err := c.opener.OpenSession(context.Background(), result.Value); err != nil {
+	windowIndex, paneIndex, err := c.resolveSelection(result.Value)
+	if err != nil {
+		return err
+	}
+	if err := c.opener.OpenSessionTarget(context.Background(), result.Value, windowIndex, paneIndex); err != nil {
 		return fmt.Errorf("open tmux session %q: %w", result.Value, err)
 	}
 
 	return nil
+}
+
+func (c *sessionsCommand) resolveSelection(sessionName string) (string, string, error) {
+	if c.store == nil {
+		return "", "", nil
+	}
+
+	selection, found, err := c.store.ReadSelection(strings.TrimSpace(sessionName))
+	if err != nil {
+		return "", "", fmt.Errorf("load sessions preview selection for %q: %w", sessionName, err)
+	}
+	if !found {
+		return "", "", nil
+	}
+
+	return strings.TrimSpace(selection.WindowIndex), strings.TrimSpace(selection.PaneIndex), nil
+}
+
+func sessionsPreviewWindow(ui string) string {
+	if ui == switchUISidebar {
+		return "right,60%,border-left"
+	}
+	return "down,45%,border-top"
 }
 
 func rowsToEntries(rows []intrender.SessionRow) []intfzf.Entry {

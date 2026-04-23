@@ -1068,6 +1068,78 @@ func TestBuildPopupSwitchCommandRequiresInputs(t *testing.T) {
 	}
 }
 
+func TestBuildPopupSessionsCommandQuotesBinaryPath(t *testing.T) {
+	t.Parallel()
+
+	command, err := BuildPopupSessionsCommand("/tmp/projmux's bin")
+	if err != nil {
+		t.Fatalf("BuildPopupSessionsCommand returned error: %v", err)
+	}
+
+	const want = "exec '/tmp/projmux'\\''s bin' 'sessions' '--ui=popup'"
+	if command != want {
+		t.Fatalf("command = %q, want %q", command, want)
+	}
+}
+
+func TestBuildPopupSessionsCommandRequiresBinaryPath(t *testing.T) {
+	t.Parallel()
+
+	if _, err := BuildPopupSessionsCommand(" "); err == nil || !strings.Contains(err.Error(), "binary path is required") {
+		t.Fatalf("unexpected error for binary path: %v", err)
+	}
+}
+
+func TestBuildSessionPopupPreviewCommandQuotesBinaryPath(t *testing.T) {
+	t.Parallel()
+
+	command, err := BuildSessionPopupPreviewCommand("/tmp/projmux's bin")
+	if err != nil {
+		t.Fatalf("BuildSessionPopupPreviewCommand returned error: %v", err)
+	}
+
+	const want = "exec '/tmp/projmux'\\''s bin' 'session-popup' 'preview' {2}"
+	if command != want {
+		t.Fatalf("command = %q, want %q", command, want)
+	}
+}
+
+func TestBuildSessionPopupPreviewCommandRequiresBinaryPath(t *testing.T) {
+	t.Parallel()
+
+	if _, err := BuildSessionPopupPreviewCommand(" "); err == nil || !strings.Contains(err.Error(), "binary path is required") {
+		t.Fatalf("unexpected error for binary path: %v", err)
+	}
+}
+
+func TestBuildSessionPopupCycleCommandQuotesInputs(t *testing.T) {
+	t.Parallel()
+
+	command, err := BuildSessionPopupCycleCommand("/tmp/projmux's bin", "cycle-window", "next")
+	if err != nil {
+		t.Fatalf("BuildSessionPopupCycleCommand returned error: %v", err)
+	}
+
+	const want = "exec '/tmp/projmux'\\''s bin' 'session-popup' 'cycle-window' {2} 'next'"
+	if command != want {
+		t.Fatalf("command = %q, want %q", command, want)
+	}
+}
+
+func TestBuildSessionPopupCycleCommandRequiresInputs(t *testing.T) {
+	t.Parallel()
+
+	if _, err := BuildSessionPopupCycleCommand(" ", "cycle-window", "next"); err == nil || !strings.Contains(err.Error(), "binary path is required") {
+		t.Fatalf("unexpected error for binary path: %v", err)
+	}
+	if _, err := BuildSessionPopupCycleCommand("/tmp/projmux", " ", "next"); err == nil || !strings.Contains(err.Error(), "subcommand is required") {
+		t.Fatalf("unexpected error for subcommand: %v", err)
+	}
+	if _, err := BuildSessionPopupCycleCommand("/tmp/projmux", "cycle-window", " "); err == nil || !strings.Contains(err.Error(), "direction is required") {
+		t.Fatalf("unexpected error for direction: %v", err)
+	}
+}
+
 func TestBuildSwitchPreviewCommandQuotesBinaryPath(t *testing.T) {
 	t.Parallel()
 

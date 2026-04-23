@@ -33,12 +33,17 @@
 - `projmux tmux popup-toggle <mode>`
 - `projmux tmux rows <mode>`
 - `projmux tmux preview <target>`
+- `projmux tmux popup-switch`
+- `projmux tmux popup-sessions`
+- `projmux tmux popup-preview <session>`
 
 ## Suggested mode mapping
 
 - `projmux switch --ui=popup`
 - `projmux switch --ui=sidebar`
 - `projmux sessions --ui=popup`
+- `projmux session-popup preview <session>`
+- `projmux session-popup open <session>`
 
 ## Compatibility target
 

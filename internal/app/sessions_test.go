@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	corepreview "github.com/es5h/projmux/internal/core/preview"
 	intfzf "github.com/es5h/projmux/internal/ui/fzf"
 )
 
@@ -18,11 +19,20 @@ func TestAppRunSessionsDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 			recent: sessionsRecentFunc(func(context.Context) ([]string, error) {
 				return []string{"repo-b", "home"}, nil
 			}),
+			store: &recordingSessionsStore{
+				found: true,
+				selection: corepreview.Selection{
+					SessionName: "repo-b",
+					WindowIndex: "3",
+					PaneIndex:   "1",
+				},
+			},
 			runner: sessionsRunnerFunc(func(options intfzf.Options) (intfzf.Result, error) {
 				gotOptions = options
 				return intfzf.Result{Value: "repo-b"}, nil
 			}),
-			opener: &recordingSessionsOpener{},
+			executable: func() (string, error) { return "/tmp/proj mux/bin/projmux", nil },
+			opener:     &recordingSessionsOpener{},
 		},
 	}
 
@@ -40,8 +50,28 @@ func TestAppRunSessionsDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
 	}
+	if got, want := gotOptions.PreviewCommand, "exec '/tmp/proj mux/bin/projmux' 'session-popup' 'preview' {2}"; got != want {
+		t.Fatalf("runner preview command = %q, want %q", got, want)
+	}
+	if got, want := gotOptions.PreviewWindow, "down,45%,border-top"; got != want {
+		t.Fatalf("runner preview window = %q, want %q", got, want)
+	}
+	if got, want := gotOptions.Bindings, []string{
+		"left:execute-silent(exec '/tmp/proj mux/bin/projmux' 'session-popup' 'cycle-window' {2} 'prev')+refresh-preview",
+		"right:execute-silent(exec '/tmp/proj mux/bin/projmux' 'session-popup' 'cycle-window' {2} 'next')+refresh-preview",
+		"alt-up:execute-silent(exec '/tmp/proj mux/bin/projmux' 'session-popup' 'cycle-pane' {2} 'prev')+refresh-preview",
+		"alt-down:execute-silent(exec '/tmp/proj mux/bin/projmux' 'session-popup' 'cycle-pane' {2} 'next')+refresh-preview",
+	}; !equalStrings(got, want) {
+		t.Fatalf("runner bindings = %q, want %q", got, want)
+	}
 	if got, want := opener.openSessionName, "repo-b"; got != want {
 		t.Fatalf("open session = %q, want %q", got, want)
+	}
+	if got, want := opener.windowIndex, "3"; got != want {
+		t.Fatalf("open window = %q, want %q", got, want)
+	}
+	if got, want := opener.paneIndex, "1"; got != want {
+		t.Fatalf("open pane = %q, want %q", got, want)
 	}
 }
 
@@ -57,7 +87,8 @@ func TestSessionsCommandSupportsSidebarUI(t *testing.T) {
 			gotOptions = options
 			return intfzf.Result{}, nil
 		}),
-		opener: &recordingSessionsOpener{},
+		executable: func() (string, error) { return "/tmp/projmux", nil },
+		opener:     &recordingSessionsOpener{},
 	}
 
 	if err := cmd.Run([]string{"--ui=sidebar"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
@@ -65,6 +96,9 @@ func TestSessionsCommandSupportsSidebarUI(t *testing.T) {
 	}
 	if got, want := gotOptions.UI, switchUISidebar; got != want {
 		t.Fatalf("runner UI = %q, want %q", got, want)
+	}
+	if got, want := gotOptions.PreviewWindow, "right,60%,border-left"; got != want {
+		t.Fatalf("runner preview window = %q, want %q", got, want)
 	}
 }
 
@@ -79,7 +113,8 @@ func TestSessionsCommandAllowsEmptySelection(t *testing.T) {
 		runner: sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) {
 			return intfzf.Result{}, nil
 		}),
-		opener: opener,
+		executable: func() (string, error) { return "/tmp/projmux", nil },
+		opener:     opener,
 	}
 
 	if err := cmd.Run(nil, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
@@ -102,7 +137,8 @@ func TestSessionsCommandReturnsWithoutPickerWhenRecentListIsEmpty(t *testing.T) 
 			called = true
 			return intfzf.Result{}, nil
 		}),
-		opener: &recordingSessionsOpener{},
+		executable: func() (string, error) { return "/tmp/projmux", nil },
+		opener:     &recordingSessionsOpener{},
 	}
 
 	if err := cmd.Run(nil, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
@@ -163,12 +199,32 @@ func TestSessionsCommandPropagatesSetupErrors(t *testing.T) {
 			want: "resolve recent tmux sessions",
 		},
 		{
+			name: "executable resolver",
+			cmd: &sessionsCommand{
+				recent: sessionsRecentFunc(func(context.Context) ([]string, error) { return []string{"repo-b"}, nil }),
+				runner: sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) {
+					return intfzf.Result{}, nil
+				}),
+			},
+			want: "sessions executable resolver is not configured",
+		},
+		{
+			name: "resolve executable",
+			cmd: &sessionsCommand{
+				recent:     sessionsRecentFunc(func(context.Context) ([]string, error) { return []string{"repo-b"}, nil }),
+				runner:     sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) { return intfzf.Result{}, nil }),
+				executable: func() (string, error) { return "", errors.New("not found") },
+			},
+			want: "resolve sessions executable",
+		},
+		{
 			name: "runner",
 			cmd: &sessionsCommand{
 				recent: sessionsRecentFunc(func(context.Context) ([]string, error) { return []string{"repo-b"}, nil }),
 				runner: sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) {
 					return intfzf.Result{}, errors.New("fzf failed")
 				}),
+				executable: func() (string, error) { return "/tmp/projmux", nil },
 			},
 			want: "run sessions picker",
 		},
@@ -179,8 +235,20 @@ func TestSessionsCommandPropagatesSetupErrors(t *testing.T) {
 				runner: sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) {
 					return intfzf.Result{Value: "repo-b"}, nil
 				}),
+				executable: func() (string, error) { return "/tmp/projmux", nil },
 			},
 			want: "sessions opener is not configured",
+		},
+		{
+			name: "load selection",
+			cmd: &sessionsCommand{
+				recent:     sessionsRecentFunc(func(context.Context) ([]string, error) { return []string{"repo-b"}, nil }),
+				store:      &recordingSessionsStore{err: errors.New("state failed")},
+				runner:     sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) { return intfzf.Result{Value: "repo-b"}, nil }),
+				executable: func() (string, error) { return "/tmp/projmux", nil },
+				opener:     &recordingSessionsOpener{},
+			},
+			want: "load sessions preview selection",
 		},
 		{
 			name: "open session",
@@ -189,7 +257,8 @@ func TestSessionsCommandPropagatesSetupErrors(t *testing.T) {
 				runner: sessionsRunnerFunc(func(intfzf.Options) (intfzf.Result, error) {
 					return intfzf.Result{Value: "repo-b"}, nil
 				}),
-				opener: &recordingSessionsOpener{openErr: errors.New("attach failed")},
+				executable: func() (string, error) { return "/tmp/projmux", nil },
+				opener:     &recordingSessionsOpener{openErr: errors.New("attach failed")},
 			},
 			want: "open tmux session",
 		},
@@ -224,10 +293,27 @@ func (f sessionsRunnerFunc) Run(options intfzf.Options) (intfzf.Result, error) {
 
 type recordingSessionsOpener struct {
 	openSessionName string
+	windowIndex     string
+	paneIndex       string
 	openErr         error
 }
 
-func (o *recordingSessionsOpener) OpenSession(_ context.Context, sessionName string) error {
+func (o *recordingSessionsOpener) OpenSessionTarget(_ context.Context, sessionName, windowIndex, paneIndex string) error {
 	o.openSessionName = sessionName
+	o.windowIndex = windowIndex
+	o.paneIndex = paneIndex
 	return o.openErr
+}
+
+type recordingSessionsStore struct {
+	selection corepreview.Selection
+	found     bool
+	err       error
+}
+
+func (s *recordingSessionsStore) ReadSelection(string) (corepreview.Selection, bool, error) {
+	if s.err != nil {
+		return corepreview.Selection{}, false, s.err
+	}
+	return s.selection, s.found, nil
 }

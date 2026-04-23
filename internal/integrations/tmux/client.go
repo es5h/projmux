@@ -518,6 +518,49 @@ func BuildPopupSwitchCommand(binaryPath, cwd string) (string, error) {
 	return "cd -- " + shellQuote(cwd) + " && " + buildExecCommand(binaryPath, "switch", "--ui=popup"), nil
 }
 
+// BuildPopupSessionsCommand builds the shell command used inside a tmux popup
+// for the existing `projmux sessions --ui=popup` flow.
+func BuildPopupSessionsCommand(binaryPath string) (string, error) {
+	binaryPath = strings.TrimSpace(binaryPath)
+	if binaryPath == "" {
+		return "", errors.New("popup sessions binary path is required")
+	}
+
+	return buildExecCommand(binaryPath, "sessions", "--ui=popup"), nil
+}
+
+// BuildSessionPopupPreviewCommand builds the shell command used by fzf preview
+// panes for the existing `projmux session-popup preview {2}` flow.
+func BuildSessionPopupPreviewCommand(binaryPath string) (string, error) {
+	binaryPath = strings.TrimSpace(binaryPath)
+	if binaryPath == "" {
+		return "", errors.New("session popup preview binary path is required")
+	}
+
+	return buildExecCommand(binaryPath, "session-popup", "preview") + " {2}", nil
+}
+
+// BuildSessionPopupCycleCommand builds the shell command used by fzf bindings
+// to move popup preview selection for the focused tmux session.
+func BuildSessionPopupCycleCommand(binaryPath, subcommand, direction string) (string, error) {
+	binaryPath = strings.TrimSpace(binaryPath)
+	if binaryPath == "" {
+		return "", errors.New("session popup cycle binary path is required")
+	}
+
+	subcommand = strings.TrimSpace(subcommand)
+	if subcommand == "" {
+		return "", errors.New("session popup cycle subcommand is required")
+	}
+
+	direction = strings.TrimSpace(direction)
+	if direction == "" {
+		return "", errors.New("session popup cycle direction is required")
+	}
+
+	return buildExecCommand(binaryPath, "session-popup", subcommand) + " {2} " + shellQuote(direction), nil
+}
+
 // BuildSwitchPreviewCommand builds the shell command used by fzf preview panes
 // for the existing `projmux switch preview {2}` flow.
 func BuildSwitchPreviewCommand(binaryPath string) (string, error) {
