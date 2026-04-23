@@ -95,6 +95,14 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 	if got, want := gotRunnerOptions.PreviewWindow, "down,35%,border-top"; got != want {
 		t.Fatalf("runner preview window = %q, want %q", got, want)
 	}
+	if got, want := gotRunnerOptions.Bindings, []string{
+		"left:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-window' {2} 'prev')+refresh-preview",
+		"right:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-window' {2} 'next')+refresh-preview",
+		"alt-up:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-pane' {2} 'prev')+refresh-preview",
+		"alt-down:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-pane' {2} 'next')+refresh-preview",
+	}; !equalStrings(got, want) {
+		t.Fatalf("runner bindings = %q, want %q", got, want)
+	}
 	if got, want := gotRunnerOptions.Candidates, []string{"/home/tester", "/home/tester/dotfiles"}; !equalStrings(got, want) {
 		t.Fatalf("runner candidates = %q, want %q", got, want)
 	}
@@ -151,6 +159,14 @@ func TestSwitchCommandSupportsSidebarUI(t *testing.T) {
 	}
 	if got, want := gotRunnerOptions.PreviewWindow, "right,60%,border-left"; got != want {
 		t.Fatalf("runner preview window = %q, want %q", got, want)
+	}
+	if got, want := gotRunnerOptions.Bindings, []string{
+		"left:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-window' {2} 'prev')+refresh-preview",
+		"right:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-window' {2} 'next')+refresh-preview",
+		"alt-up:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-pane' {2} 'prev')+refresh-preview",
+		"alt-down:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-pane' {2} 'next')+refresh-preview",
+	}; !equalStrings(got, want) {
+		t.Fatalf("runner bindings = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Entries, []intfzf.Entry{
 		{Label: "tmp-app  [new]  /tmp/app", Value: "/tmp/app"},
@@ -269,6 +285,14 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 	}
 	if got, want := fakeRunner.last.PreviewWindow, "right,60%,border-left"; got != want {
 		t.Fatalf("runner preview window = %q, want %q", got, want)
+	}
+	if got, want := fakeRunner.last.Bindings, []string{
+		"left:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-window' {2} 'prev')+refresh-preview",
+		"right:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-window' {2} 'next')+refresh-preview",
+		"alt-up:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-pane' {2} 'prev')+refresh-preview",
+		"alt-down:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-pane' {2} 'next')+refresh-preview",
+	}; !equalStrings(got, want) {
+		t.Fatalf("runner bindings = %q, want %q", got, want)
 	}
 	if got, want := fakeRunner.last.UI, switchUISidebar; got != want {
 		t.Fatalf("runner UI = %q, want %q", got, want)
@@ -639,6 +663,97 @@ func TestSwitchCommandPreviewRendersNewSessionContextWithoutInventory(t *testing
 	}
 	if got := inventory.sessionWindowsSession; got != "" {
 		t.Fatalf("SessionWindows session = %q, want empty", got)
+	}
+	if got := inventory.sessionPanesSession; got != "" {
+		t.Fatalf("SessionPanes session = %q, want empty", got)
+	}
+}
+
+func TestSwitchCommandCycleWindowUpdatesStoredPreviewSelection(t *testing.T) {
+	t.Parallel()
+
+	fixture := newSwitchFixture(t)
+	fixture.mkdir("home/source/repos/repo-a/subdir")
+
+	store := &stubPreviewStore{
+		cycleWindowResult: corepreview.CycleResult{
+			Cursor:   corepreview.Cursor{WindowIndex: "3", PaneIndex: "1"},
+			Selected: true,
+			Changed:  true,
+		},
+	}
+	inventory := &stubPreviewInventory{
+		windows: []corepreview.Window{
+			{Index: "2"},
+			{Index: "3", Active: true},
+		},
+		panes: []corepreview.Pane{
+			{WindowIndex: "3", Index: "1", Active: true},
+		},
+	}
+	cmd := &switchCommand{
+		discover:     candidates.Discover,
+		sessions:     &capturingSwitchSessionExecutor{exists: map[string]bool{"repo-a": true}},
+		previewStore: store,
+		inventory:    inventory,
+		identity:     stubSwitchIdentityResolver{name: "repo-a"},
+		validate:     validateDirectory,
+		homeDir:      func() (string, error) { return fixture.path("home"), nil },
+		lookupEnv: func(name string) string {
+			if name == repoRootEnvVar {
+				return fixture.path("home/source/repos")
+			}
+			return ""
+		},
+	}
+
+	if err := cmd.Run([]string{"cycle-window", fixture.path("home/source/repos/repo-a/subdir"), "next"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if got, want := store.cycleWindowSession, "repo-a"; got != want {
+		t.Fatalf("cycle window session = %q, want %q", got, want)
+	}
+	if got, want := store.cycleWindowDirection, corepreview.DirectionNext; got != want {
+		t.Fatalf("cycle window direction = %q, want %q", got, want)
+	}
+	if got, want := inventory.sessionWindowsSession, "repo-a"; got != want {
+		t.Fatalf("SessionWindows session = %q, want %q", got, want)
+	}
+	if got, want := inventory.sessionPanesSession, "repo-a"; got != want {
+		t.Fatalf("SessionPanes session = %q, want %q", got, want)
+	}
+}
+
+func TestSwitchCommandCyclePaneNoOpsForNewSessionCandidates(t *testing.T) {
+	t.Parallel()
+
+	fixture := newSwitchFixture(t)
+	fixture.mkdir("home/source/repos/repo-a/subdir")
+
+	store := &stubPreviewStore{}
+	inventory := &stubPreviewInventory{}
+	cmd := &switchCommand{
+		discover:     candidates.Discover,
+		sessions:     &capturingSwitchSessionExecutor{},
+		previewStore: store,
+		inventory:    inventory,
+		identity:     stubSwitchIdentityResolver{name: "repo-a"},
+		validate:     validateDirectory,
+		homeDir:      func() (string, error) { return fixture.path("home"), nil },
+		lookupEnv: func(name string) string {
+			if name == repoRootEnvVar {
+				return fixture.path("home/source/repos")
+			}
+			return ""
+		},
+	}
+
+	if err := cmd.Run([]string{"cycle-pane", fixture.path("home/source/repos/repo-a/subdir"), "prev"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got := store.cyclePaneSession; got != "" {
+		t.Fatalf("cycle pane session = %q, want empty", got)
 	}
 	if got := inventory.sessionPanesSession; got != "" {
 		t.Fatalf("SessionPanes session = %q, want empty", got)

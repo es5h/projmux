@@ -1090,6 +1090,34 @@ func TestBuildSwitchPreviewCommandRequiresBinaryPath(t *testing.T) {
 	}
 }
 
+func TestBuildSwitchCycleWindowCommandQuotesInputs(t *testing.T) {
+	t.Parallel()
+
+	command, err := BuildSwitchCycleWindowCommand("/tmp/projmux's bin", "prev")
+	if err != nil {
+		t.Fatalf("BuildSwitchCycleWindowCommand returned error: %v", err)
+	}
+
+	const want = "exec '/tmp/projmux'\\''s bin' 'switch' 'cycle-window' {2} 'prev'"
+	if command != want {
+		t.Fatalf("command = %q, want %q", command, want)
+	}
+}
+
+func TestBuildSwitchCyclePaneCommandQuotesInputs(t *testing.T) {
+	t.Parallel()
+
+	command, err := BuildSwitchCyclePaneCommand("/tmp/projmux's bin", "next")
+	if err != nil {
+		t.Fatalf("BuildSwitchCyclePaneCommand returned error: %v", err)
+	}
+
+	const want = "exec '/tmp/projmux'\\''s bin' 'switch' 'cycle-pane' {2} 'next'"
+	if command != want {
+		t.Fatalf("command = %q, want %q", command, want)
+	}
+}
+
 func TestClientEnsureSessionRequiresCWD(t *testing.T) {
 	t.Parallel()
 

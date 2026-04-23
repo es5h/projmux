@@ -59,6 +59,8 @@ type switchSessionInspector interface {
 
 type switchPreviewStore interface {
 	ReadSelection(sessionName string) (corepreview.Selection, bool, error)
+	CyclePaneSelection(sessionName string, windows []corepreview.Window, panes []corepreview.Pane, direction corepreview.Direction) (corepreview.CycleResult, error)
+	CycleWindowSelection(sessionName string, windows []corepreview.Window, panes []corepreview.Pane, direction corepreview.Direction) (corepreview.CycleResult, error)
 }
 
 type switchCommand struct {
@@ -145,6 +147,10 @@ func (c *switchCommand) Run(args []string, stdout, stderr io.Writer) error {
 			return c.runToggleTag(args[1:], stdout, stderr)
 		case "preview":
 			return c.runPreview(args[1:], stdout, stderr)
+		case "cycle-pane":
+			return c.runCyclePane(args[1:], stderr)
+		case "cycle-window":
+			return c.runCycleWindow(args[1:], stderr)
 		}
 	}
 
@@ -252,6 +258,18 @@ func (c *switchCommand) runPreview(args []string, stdout, stderr io.Writer) erro
 
 	_, err = io.WriteString(stdout, intrender.RenderSwitchPreview(model))
 	return err
+}
+
+func (c *switchCommand) runCyclePane(args []string, stderr io.Writer) error {
+	return c.runCycle("switch cycle-pane", args, stderr, func(store switchPreviewStore, sessionName string, windows []corepreview.Window, panes []corepreview.Pane, direction corepreview.Direction) (corepreview.CycleResult, error) {
+		return store.CyclePaneSelection(sessionName, windows, panes, direction)
+	})
+}
+
+func (c *switchCommand) runCycleWindow(args []string, stderr io.Writer) error {
+	return c.runCycle("switch cycle-window", args, stderr, func(store switchPreviewStore, sessionName string, windows []corepreview.Window, panes []corepreview.Pane, direction corepreview.Direction) (corepreview.CycleResult, error) {
+		return store.CycleWindowSelection(sessionName, windows, panes, direction)
+	})
 }
 
 func (c *switchCommand) planFromInputs(ui string, inputs candidates.Inputs) (switchPlan, error) {
@@ -485,6 +503,84 @@ func (c *switchCommand) previewModel(ctx context.Context, target string) (corepr
 	modelInputs.Windows = windows
 	modelInputs.Panes = panes
 	return corepreview.BuildSwitchReadModel(modelInputs), nil
+}
+
+type switchCycleFunc func(store switchPreviewStore, sessionName string, windows []corepreview.Window, panes []corepreview.Pane, direction corepreview.Direction) (corepreview.CycleResult, error)
+
+func (c *switchCommand) runCycle(command string, args []string, stderr io.Writer, cycle switchCycleFunc) error {
+	target, direction, err := c.parseCycleArgs(command, args, stderr)
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+
+	if c.identityErr != nil {
+		return fmt.Errorf("configure session identity resolver: %w", c.identityErr)
+	}
+	if c.identity == nil {
+		return fmt.Errorf("switch session identity resolver is not configured")
+	}
+
+	sessionName, err := c.identity.SessionIdentityForPath(target)
+	if err != nil {
+		return fmt.Errorf("resolve switch cycle session identity: %w", err)
+	}
+
+	exists, err := c.switchSessionExists(ctx, sessionName)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+
+	store, err := c.requireSwitchPreviewStore()
+	if err != nil {
+		return err
+	}
+	inventory, err := c.requireSwitchPreviewInventory()
+	if err != nil {
+		return err
+	}
+
+	windows, err := inventory.SessionWindows(ctx, sessionName)
+	if err != nil {
+		return fmt.Errorf("load switch cycle windows for %q: %w", sessionName, err)
+	}
+	panes, err := inventory.SessionPanes(ctx, sessionName)
+	if err != nil {
+		return fmt.Errorf("load switch cycle panes for %q: %w", sessionName, err)
+	}
+
+	if _, err := cycle(store, sessionName, windows, panes, direction); err != nil {
+		return fmt.Errorf("%s for %q: %w", command, sessionName, err)
+	}
+
+	return nil
+}
+
+func (c *switchCommand) parseCycleArgs(command string, args []string, stderr io.Writer) (string, corepreview.Direction, error) {
+	if len(args) != 2 {
+		printSwitchUsage(stderr)
+		return "", "", fmt.Errorf("%s requires exactly 2 arguments: <path> <next|prev>", command)
+	}
+
+	target, err := c.resolveSwitchTarget(args[:1], command)
+	if err != nil {
+		if strings.Contains(err.Error(), "requires a non-empty") {
+			printSwitchUsage(stderr)
+		}
+		return "", "", err
+	}
+
+	direction, err := parsePreviewDirection(args[1])
+	if err != nil {
+		printSwitchUsage(stderr)
+		return "", "", fmt.Errorf("%s: %w", command, err)
+	}
+
+	return target, direction, nil
 }
 
 func (c *switchCommand) switchSessionExists(ctx context.Context, sessionName string) (bool, error) {
@@ -727,11 +823,12 @@ func (c *switchCommand) runPicker(plan switchPlan) (intfzf.Result, error) {
 		Entries:    plan.Rows,
 		ExpectKeys: []string{switchTagExpectKey},
 	}
-	if previewCommand, err := c.switchPreviewCommand(); err != nil {
+	if previewCommand, bindings, err := c.switchPickerSurface(plan.UI); err != nil {
 		return intfzf.Result{}, err
 	} else if previewCommand != "" {
 		options.PreviewCommand = previewCommand
 		options.PreviewWindow = switchPreviewWindow(plan.UI)
+		options.Bindings = bindings
 	}
 
 	result, err := c.runner.Run(options)
@@ -742,21 +839,46 @@ func (c *switchCommand) runPicker(plan switchPlan) (intfzf.Result, error) {
 	return result, nil
 }
 
-func (c *switchCommand) switchPreviewCommand() (string, error) {
+func (c *switchCommand) switchPickerSurface(ui string) (string, []string, error) {
 	if c.executable == nil {
-		return "", nil
+		return "", nil, nil
 	}
 
 	binaryPath, err := c.executable()
 	if err != nil {
-		return "", fmt.Errorf("resolve switch preview executable: %w", err)
+		return "", nil, fmt.Errorf("resolve switch preview executable: %w", err)
 	}
 
-	command, err := inttmux.BuildSwitchPreviewCommand(binaryPath)
+	previewCommand, err := inttmux.BuildSwitchPreviewCommand(binaryPath)
 	if err != nil {
-		return "", fmt.Errorf("build switch preview command: %w", err)
+		return "", nil, fmt.Errorf("build switch preview command: %w", err)
 	}
-	return command, nil
+
+	windowPrev, err := inttmux.BuildSwitchCycleWindowCommand(binaryPath, string(corepreview.DirectionPrev))
+	if err != nil {
+		return "", nil, fmt.Errorf("build switch window-prev command: %w", err)
+	}
+	windowNext, err := inttmux.BuildSwitchCycleWindowCommand(binaryPath, string(corepreview.DirectionNext))
+	if err != nil {
+		return "", nil, fmt.Errorf("build switch window-next command: %w", err)
+	}
+	panePrev, err := inttmux.BuildSwitchCyclePaneCommand(binaryPath, string(corepreview.DirectionPrev))
+	if err != nil {
+		return "", nil, fmt.Errorf("build switch pane-prev command: %w", err)
+	}
+	paneNext, err := inttmux.BuildSwitchCyclePaneCommand(binaryPath, string(corepreview.DirectionNext))
+	if err != nil {
+		return "", nil, fmt.Errorf("build switch pane-next command: %w", err)
+	}
+
+	bindings := []string{
+		"left:execute-silent(" + windowPrev + ")+refresh-preview",
+		"right:execute-silent(" + windowNext + ")+refresh-preview",
+		"alt-up:execute-silent(" + panePrev + ")+refresh-preview",
+		"alt-down:execute-silent(" + paneNext + ")+refresh-preview",
+	}
+
+	return previewCommand, bindings, nil
 }
 
 func switchPreviewWindow(ui string) string {
@@ -871,6 +993,8 @@ func printSwitchUsage(w io.Writer) {
 	fmt.Fprintln(w, "  projmux switch [--ui=popup|sidebar]")
 	fmt.Fprintln(w, "  projmux switch toggle-tag [path]")
 	fmt.Fprintln(w, "  projmux switch preview [path]")
+	fmt.Fprintln(w, "  projmux switch cycle-pane <path> <next|prev>")
+	fmt.Fprintln(w, "  projmux switch cycle-window <path> <next|prev>")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Options:")
 	fmt.Fprintln(w, "  --ui string   Candidate surface to prepare (popup or sidebar) (default \"popup\")")

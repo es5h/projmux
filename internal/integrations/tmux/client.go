@@ -529,6 +529,38 @@ func BuildSwitchPreviewCommand(binaryPath string) (string, error) {
 	return buildExecCommand(binaryPath, "switch", "preview") + " {2}", nil
 }
 
+// BuildSwitchCycleWindowCommand builds the shell command used by fzf bindings
+// to move switch preview window selection for the focused candidate.
+func BuildSwitchCycleWindowCommand(binaryPath, direction string) (string, error) {
+	binaryPath = strings.TrimSpace(binaryPath)
+	if binaryPath == "" {
+		return "", errors.New("switch cycle window binary path is required")
+	}
+
+	direction = strings.TrimSpace(direction)
+	if direction == "" {
+		return "", errors.New("switch cycle window direction is required")
+	}
+
+	return buildExecCommand(binaryPath, "switch", "cycle-window") + " {2} " + shellQuote(direction), nil
+}
+
+// BuildSwitchCyclePaneCommand builds the shell command used by fzf bindings to
+// move switch preview pane selection for the focused candidate.
+func BuildSwitchCyclePaneCommand(binaryPath, direction string) (string, error) {
+	binaryPath = strings.TrimSpace(binaryPath)
+	if binaryPath == "" {
+		return "", errors.New("switch cycle pane binary path is required")
+	}
+
+	direction = strings.TrimSpace(direction)
+	if direction == "" {
+		return "", errors.New("switch cycle pane direction is required")
+	}
+
+	return buildExecCommand(binaryPath, "switch", "cycle-pane") + " {2} " + shellQuote(direction), nil
+}
+
 func buildExecCommand(binaryPath string, args ...string) string {
 	quoted := make([]string, 0, len(args)+2)
 	quoted = append(quoted, "exec", shellQuote(binaryPath))
