@@ -40,6 +40,15 @@ type ExecRunner struct{}
 // Run executes a command and returns its combined output.
 func (ExecRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	if name == "tmux" && len(args) > 0 && (args[0] == "attach-session" || args[0] == "switch-client") {
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return nil, fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
+		}
+		return nil, nil
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		trimmed := strings.TrimSpace(string(output))
@@ -519,7 +528,7 @@ func parseEphemeralSessions(output []byte) ([]lifecycle.SessionInventory, error)
 			return nil, errSessionNameRequired
 		}
 
-		attached, err := parseBinaryFlag(fields[1], errSessionAttachedInvalid)
+		attached, err := parseAttachedFlag(fields[1])
 		if err != nil {
 			return nil, err
 		}
@@ -552,6 +561,16 @@ func parseBinaryFlag(value string, invalid error) (bool, error) {
 	default:
 		return false, invalid
 	}
+}
+
+func parseAttachedFlag(value string) (bool, error) {
+	trimmed := strings.TrimSpace(value)
+	count, err := strconv.Atoi(trimmed)
+	if err != nil || count < 0 {
+		return false, errSessionAttachedInvalid
+	}
+
+	return count > 0, nil
 }
 
 func parseOptionalBinaryFlag(value string, invalid error) (bool, error) {
@@ -639,13 +658,18 @@ func BuildSessionPopupCycleCommand(binaryPath, subcommand, direction string) (st
 
 // BuildSwitchPreviewCommand builds the shell command used by fzf preview panes
 // for the existing `projmux switch preview {2}` flow.
-func BuildSwitchPreviewCommand(binaryPath string) (string, error) {
+func BuildSwitchPreviewCommand(binaryPath, ui string) (string, error) {
 	binaryPath = strings.TrimSpace(binaryPath)
 	if binaryPath == "" {
 		return "", errors.New("switch preview binary path is required")
 	}
 
-	return buildExecCommand(binaryPath, "switch", "preview") + " {2}", nil
+	ui = strings.TrimSpace(ui)
+	if ui == "" {
+		ui = "popup"
+	}
+
+	return buildExecCommand(binaryPath, "switch", "preview", "--ui="+ui) + " {2}", nil
 }
 
 // BuildSwitchCycleWindowCommand builds the shell command used by fzf bindings
