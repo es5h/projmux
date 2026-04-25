@@ -51,12 +51,17 @@ func TestShellWritesAppConfigAndRunsIsolatedTmux(t *testing.T) {
 		"bind-key -n C-n new-window -c \"#{pane_current_path}\"",
 		"bind-key -n User8 previous-window",
 		"bind-key -n User9 next-window",
+		"set -g status-left-length 20",
+		"set -g status-left \"#[bold,fg=colour16,bg=colour45] projmux #[default]\"",
 		"#[bold,fg=colour16,bg=colour45] projmux #[default]",
 		"'/tmp/proj mux/bin/projmux' tmux popup-toggle --client #{client_tty} sessionizer-sidebar",
 	} {
 		if !strings.Contains(config, want) {
 			t.Fatalf("config = %q, want substring %q", config, want)
 		}
+	}
+	if strings.Contains(config, "#[bold,fg=colour16,bg=colour45] app #[default]") {
+		t.Fatalf("config = %q, did not expect duplicate app status badge", config)
 	}
 
 	wantArgs := []string{"-L", "projmux", "-f", configPath, "new-session", "-A", "-s", "main", "-c", "/tmp/work tree"}

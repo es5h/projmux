@@ -708,7 +708,7 @@ func tmuxAppConfig(binaryPath string) string {
 		"set -g status-position bottom",
 		"set -g status-interval 5",
 		"set -g status-keys vi",
-		"set -g status-left-length 80",
+		"set -g status-left-length 20",
 		"set -g status-right-length 140",
 		"set -g window-status-separator \" \"",
 		"set -g automatic-rename on",
@@ -725,8 +725,8 @@ func tmuxAppConfig(binaryPath string) string {
 	lines = append(lines, strings.Split(strings.TrimSpace(tmuxStandaloneConfig(binaryPath)), "\n")[1:]...)
 	lines = append(lines, tmuxAppKeyBindings()...)
 	lines = append(lines,
-		"set -g status-left \"#[bold,fg=colour16,bg=colour45] projmux #[default] #[bold,fg=colour231,bg=colour24] #S #[default]\"",
-		"set -g status-right "+tmuxConfigQuote("#[fg=colour242]#{=/28/...:pane_current_path}#[fg=colour239]  #("+bin+" status kube)#("+bin+" status git)  %Y-%m-%d %H:%M #[bold,fg=colour16,bg=colour45] app #[default]"),
+		"set -g status-left \"#[bold,fg=colour16,bg=colour45] projmux #[default]\"",
+		"set -g status-right "+tmuxConfigQuote("#[fg=colour242]#{=/28/...:pane_current_path}#[fg=colour239]  #("+bin+" status kube)#("+bin+" status git)  %Y-%m-%d %H:%M#[default]"),
 	)
 	return strings.Join(lines, "\n") + "\n"
 }

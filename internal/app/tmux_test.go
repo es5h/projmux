@@ -310,13 +310,18 @@ func TestTmuxPrintAppConfigUsesIsolatedAppSettings(t *testing.T) {
 		"bind-key -n User8 previous-window",
 		"bind-key -n User9 next-window",
 		"bind-key M if -F \"#{mouse}\"",
+		"set -g status-left-length 20",
+		"set -g status-left \"#[bold,fg=colour16,bg=colour45] projmux #[default]\"",
 		"#[bold,fg=colour16,bg=colour45] projmux #[default]",
-		"#[bold,fg=colour16,bg=colour45] app #[default]",
 		"'/tmp/projmux' tmux popup-toggle --client #{client_tty} sessionizer-sidebar",
+		"%Y-%m-%d %H:%M#[default]",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("print-app-config output = %q, want substring %q", output, want)
 		}
+	}
+	if strings.Contains(output, "#[bold,fg=colour16,bg=colour45] app #[default]") {
+		t.Fatalf("print-app-config output = %q, did not expect duplicate app status badge", output)
 	}
 }
 
