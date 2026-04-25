@@ -95,6 +95,49 @@ func TestShellSupportsRuntimeOverrides(t *testing.T) {
 	}
 }
 
+func TestShellRejectsNestedProjmuxSocket(t *testing.T) {
+	t.Setenv("TMUX", "/tmp/tmux-1000/projmux,123,0")
+
+	home := t.TempDir()
+	recorder := &recordingShellRunner{}
+	cmd := &shellCommand{
+		executable: func() (string, error) { return "/tmp/projmux", nil },
+		lookupEnv:  os.Getenv,
+		homeDir:    func() (string, error) { return home, nil },
+		getwd:      func() (string, error) { return "", nil },
+		writeFile:  os.WriteFile,
+		runCommand: recorder.run,
+	}
+
+	err := cmd.Run(nil, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected nested shell error")
+	}
+	if !strings.Contains(err.Error(), "cannot run inside") {
+		t.Fatalf("error = %v, want nested shell guard", err)
+	}
+	if recorder.name != "" {
+		t.Fatalf("tmux command ran despite nested guard: %s %#v", recorder.name, recorder.args)
+	}
+	configPath := filepath.Join(home, ".config", "projmux", "tmux.conf")
+	if _, err := os.Stat(configPath); !os.IsNotExist(err) {
+		t.Fatalf("config was written despite nested guard: %v", err)
+	}
+}
+
+func TestShellRejectsNestedCustomSocket(t *testing.T) {
+	t.Setenv("TMUX", "/tmp/tmux-1000/pmx-dev,123,0")
+
+	cmd := &shellCommand{lookupEnv: os.Getenv}
+	err := cmd.Run([]string{"--socket", "pmx-dev"}, &bytes.Buffer{}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected nested custom socket error")
+	}
+	if !strings.Contains(err.Error(), `"pmx-dev"`) {
+		t.Fatalf("error = %v, want socket name", err)
+	}
+}
+
 func TestShellRejectsInvalidUsage(t *testing.T) {
 	t.Parallel()
 

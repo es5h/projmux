@@ -56,6 +56,11 @@ func (c *shellCommand) Run(args []string, stdout, stderr io.Writer) error {
 		return errors.New("shell does not accept positional arguments")
 	}
 
+	socketName := nonEmpty(strings.TrimSpace(*socket), defaultAppSocket)
+	if c.insideAppSocket(socketName) {
+		return fmt.Errorf("projmux shell cannot run inside the %q projmux tmux server", socketName)
+	}
+
 	binaryPath, err := c.resolveBinary(*binaryOverride)
 	if err != nil {
 		return err
@@ -70,11 +75,20 @@ func (c *shellCommand) Run(args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	cwd, _ := c.getwdOrEmpty()
-	runArgs := []string{"-L", nonEmpty(strings.TrimSpace(*socket), defaultAppSocket), "-f", config, "new-session", "-A", "-s", nonEmpty(strings.TrimSpace(*session), defaultAppSession)}
+	runArgs := []string{"-L", socketName, "-f", config, "new-session", "-A", "-s", nonEmpty(strings.TrimSpace(*session), defaultAppSession)}
 	if cwd != "" {
 		runArgs = append(runArgs, "-c", cwd)
 	}
 	return c.run(context.Background(), "tmux", runArgs...)
+}
+
+func (c *shellCommand) insideAppSocket(socketName string) bool {
+	tmuxEnv := strings.TrimSpace(c.env("TMUX"))
+	if tmuxEnv == "" {
+		return false
+	}
+	socketPath := strings.SplitN(tmuxEnv, ",", 2)[0]
+	return filepath.Base(socketPath) == socketName
 }
 
 func (c *shellCommand) resolveBinary(override string) (string, error) {
