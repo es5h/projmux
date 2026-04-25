@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -544,9 +545,7 @@ func (c *aiCommand) runAgentSplit(mode, direction string) error {
 	if err != nil {
 		return err
 	}
-	if err := c.applySplitLayout(targetPane, direction); err != nil {
-		return err
-	}
+	c.applySplitLayout(targetPane, direction)
 	if mode == aiModeCodex {
 		c.startAIWatchTitle(strings.TrimSpace(string(out)))
 	}
@@ -572,23 +571,117 @@ func (c *aiCommand) runShellSplit(direction string) error {
 	if err := c.run("tmux", args...); err != nil {
 		return err
 	}
-	return c.applySplitLayout(targetPane, direction)
+	c.applySplitLayout(targetPane, direction)
+	return nil
 }
 
-func (c *aiCommand) applySplitLayout(targetPane, direction string) error {
-	args := []string{"select-layout"}
-	if strings.TrimSpace(targetPane) != "" {
-		args = append(args, "-t", targetPane)
+type aiPaneGeometry struct {
+	id     string
+	left   int
+	top    int
+	width  int
+	height int
+}
+
+func (c *aiCommand) applySplitLayout(targetPane, direction string) {
+	targetPane = strings.TrimSpace(targetPane)
+	if targetPane == "" {
+		return
 	}
-	args = append(args, splitLayoutForDirection(direction))
-	return c.run("tmux", args...)
-}
-
-func splitLayoutForDirection(direction string) string {
+	panes, target, ok := c.readSplitPaneGeometry(targetPane)
+	if !ok {
+		return
+	}
+	peers := splitLayoutPeers(panes, target, direction)
+	if len(peers) < 2 {
+		return
+	}
 	if direction == "down" {
-		return "even-vertical"
+		resizePanesEvenly(peers, func(p aiPaneGeometry, size int) {
+			_ = c.run("tmux", "resize-pane", "-t", p.id, "-y", fmt.Sprintf("%d", size))
+		}, func(p aiPaneGeometry) int { return p.height })
+		return
 	}
-	return "even-horizontal"
+	resizePanesEvenly(peers, func(p aiPaneGeometry, size int) {
+		_ = c.run("tmux", "resize-pane", "-t", p.id, "-x", fmt.Sprintf("%d", size))
+	}, func(p aiPaneGeometry) int { return p.width })
+}
+
+func (c *aiCommand) readSplitPaneGeometry(targetPane string) ([]aiPaneGeometry, aiPaneGeometry, bool) {
+	out, err := c.read("tmux", "list-panes", "-t", targetPane, "-F", "#{pane_id}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}")
+	if err != nil {
+		return nil, aiPaneGeometry{}, false
+	}
+	panes := parseSplitPaneGeometry(string(out))
+	for _, pane := range panes {
+		if pane.id == targetPane {
+			return panes, pane, true
+		}
+	}
+	return panes, aiPaneGeometry{}, false
+}
+
+func parseSplitPaneGeometry(value string) []aiPaneGeometry {
+	lines := strings.Split(strings.TrimSpace(value), "\n")
+	panes := make([]aiPaneGeometry, 0, len(lines))
+	for _, line := range lines {
+		fields := strings.Split(line, "\t")
+		if len(fields) != 5 || strings.TrimSpace(fields[0]) == "" {
+			continue
+		}
+		pane := aiPaneGeometry{
+			id:     strings.TrimSpace(fields[0]),
+			left:   parsePositiveInt(fields[1]),
+			top:    parsePositiveInt(fields[2]),
+			width:  parsePositiveInt(fields[3]),
+			height: parsePositiveInt(fields[4]),
+		}
+		if pane.width <= 0 || pane.height <= 0 {
+			continue
+		}
+		panes = append(panes, pane)
+	}
+	return panes
+}
+
+func splitLayoutPeers(panes []aiPaneGeometry, target aiPaneGeometry, direction string) []aiPaneGeometry {
+	peers := make([]aiPaneGeometry, 0, len(panes))
+	for _, pane := range panes {
+		if direction == "down" {
+			if pane.left == target.left && pane.width == target.width {
+				peers = append(peers, pane)
+			}
+			continue
+		}
+		if pane.top == target.top && pane.height == target.height {
+			peers = append(peers, pane)
+		}
+	}
+	if direction == "down" {
+		sort.Slice(peers, func(i, j int) bool { return peers[i].top < peers[j].top })
+		return peers
+	}
+	sort.Slice(peers, func(i, j int) bool { return peers[i].left < peers[j].left })
+	return peers
+}
+
+func resizePanesEvenly(peers []aiPaneGeometry, resize func(aiPaneGeometry, int), currentSize func(aiPaneGeometry) int) {
+	total := 0
+	for _, pane := range peers {
+		total += currentSize(pane)
+	}
+	if total <= 0 {
+		return
+	}
+	base := total / len(peers)
+	remainder := total % len(peers)
+	for index, pane := range peers {
+		size := base
+		if index < remainder {
+			size++
+		}
+		resize(pane, size)
+	}
 }
 
 func (c *aiCommand) resolveContextDir() string {

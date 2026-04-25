@@ -165,6 +165,9 @@ func TestAISplitCodexRunsNativeTmuxSplitAndStartsWatcher(t *testing.T) {
 		if name == "tmux" && len(args) >= 6 && reflect.DeepEqual(args[:6], []string{"split-window", "-P", "-F", "#{pane_id}", "-h", "-t"}) {
 			return []byte("%9\n"), nil
 		}
+		if name == "tmux" && reflect.DeepEqual(args, []string{"list-panes", "-t", "%7", "-F", "#{pane_id}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}"}) {
+			return []byte("%2\t0\t0\t20\t10\n%7\t21\t0\t10\t10\n%9\t32\t0\t10\t10\n%8\t0\t11\t42\t10\n"), nil
+		}
 		return nil, os.ErrNotExist
 	}
 
@@ -176,8 +179,17 @@ func TestAISplitCodexRunsNativeTmuxSplitAndStartsWatcher(t *testing.T) {
 	if !containsAICommandArgs(commands, "tmux", []string{"split-window", "-P", "-F", "#{pane_id}", "-h", "-t", "%7", "-c", work, "zsh", "-lc"}) {
 		t.Fatalf("commands = %#v, want native tmux split-window", commands)
 	}
-	if !containsAICommandArgs(commands, "tmux", []string{"select-layout", "-t", "%7", "even-horizontal"}) {
-		t.Fatalf("commands = %#v, want even horizontal layout after split", commands)
+	for _, want := range [][]string{
+		{"resize-pane", "-t", "%2", "-x", "14"},
+		{"resize-pane", "-t", "%7", "-x", "13"},
+		{"resize-pane", "-t", "%9", "-x", "13"},
+	} {
+		if !containsAICommandArgs(commands, "tmux", want) {
+			t.Fatalf("commands = %#v, want scoped row resize %v", commands, want)
+		}
+	}
+	if containsAICommandArgs(commands, "tmux", []string{"resize-pane", "-t", "%8", "-x", "13"}) {
+		t.Fatalf("commands = %#v, did not expect resize outside target row", commands)
 	}
 	if !containsAICommandArgs(commands, "tmux", []string{"run-shell", "-b", "'/tmp/projmux' ai watch-title '%9'"}) {
 		t.Fatalf("commands = %#v, want codex watch-title run-shell", commands)
@@ -251,6 +263,9 @@ func TestAISplitShellUsesTmuxSplitWindow(t *testing.T) {
 		if name == "tmux" && reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%9", "-F", "#{pane_id}"}) {
 			return []byte("%9\n"), nil
 		}
+		if name == "tmux" && reflect.DeepEqual(args, []string{"list-panes", "-t", "%9", "-F", "#{pane_id}\t#{pane_left}\t#{pane_top}\t#{pane_width}\t#{pane_height}"}) {
+			return []byte("%1\t0\t0\t80\t10\n%9\t0\t11\t80\t5\n%10\t0\t17\t80\t5\n%11\t81\t0\t20\t22\n"), nil
+		}
 		return nil, os.ErrNotExist
 	}
 
@@ -261,26 +276,34 @@ func TestAISplitShellUsesTmuxSplitWindow(t *testing.T) {
 	want := []recordedAICommand{
 		{name: "tmux", args: []string{"display-message", "ai split default: shell"}},
 		{name: "tmux", args: []string{"split-window", "-v", "-t", "%9", "-c", work, "zsh", "-l"}},
-		{name: "tmux", args: []string{"select-layout", "-t", "%9", "even-vertical"}},
+		{name: "tmux", args: []string{"resize-pane", "-t", "%1", "-y", "7"}},
+		{name: "tmux", args: []string{"resize-pane", "-t", "%9", "-y", "7"}},
+		{name: "tmux", args: []string{"resize-pane", "-t", "%10", "-y", "6"}},
 	}
 	if !reflect.DeepEqual(cmdRecorder(cmd).commands, want) {
 		t.Fatalf("commands = %#v, want %#v", cmdRecorder(cmd).commands, want)
 	}
 }
 
-func TestSplitLayoutForDirection(t *testing.T) {
-	tests := []struct {
-		direction string
-		want      string
-	}{
-		{direction: "right", want: "even-horizontal"},
-		{direction: "down", want: "even-vertical"},
-		{direction: "", want: "even-horizontal"},
+func TestSplitLayoutPeersPreserveOtherAxes(t *testing.T) {
+	panes := []aiPaneGeometry{
+		{id: "%1", left: 0, top: 0, width: 20, height: 10},
+		{id: "%2", left: 21, top: 0, width: 10, height: 10},
+		{id: "%3", left: 0, top: 11, width: 31, height: 10},
 	}
-	for _, tt := range tests {
-		if got := splitLayoutForDirection(tt.direction); got != tt.want {
-			t.Fatalf("splitLayoutForDirection(%q) = %q, want %q", tt.direction, got, tt.want)
-		}
+	rightPeers := splitLayoutPeers(panes, panes[1], "right")
+	if got, want := paneGeometryIDs(rightPeers), []string{"%1", "%2"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("right peers = %#v, want %#v", got, want)
+	}
+
+	panes = []aiPaneGeometry{
+		{id: "%1", left: 0, top: 0, width: 40, height: 10},
+		{id: "%2", left: 0, top: 11, width: 40, height: 5},
+		{id: "%3", left: 41, top: 0, width: 20, height: 16},
+	}
+	downPeers := splitLayoutPeers(panes, panes[1], "down")
+	if got, want := paneGeometryIDs(downPeers), []string{"%1", "%2"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("down peers = %#v, want %#v", got, want)
 	}
 }
 
@@ -542,4 +565,12 @@ func containsAICommandArgSubstring(commands []recordedAICommand, value string) b
 		}
 	}
 	return false
+}
+
+func paneGeometryIDs(panes []aiPaneGeometry) []string {
+	ids := make([]string, 0, len(panes))
+	for _, pane := range panes {
+		ids = append(ids, pane.id)
+	}
+	return ids
 }
