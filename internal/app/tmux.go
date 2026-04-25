@@ -174,6 +174,9 @@ func (c *tmuxCommand) runPopupToggle(args []string, stderr io.Writer) error {
 	}
 	if _, err := c.runner.Run(ctx, "tmux", displayArgs...); err != nil {
 		_ = os.Remove(marker)
+		if isNoSelectionExit(err) {
+			return nil
+		}
 		return fmt.Errorf("display tmux popup-toggle %q: %w", mode.Raw, err)
 	}
 	return nil

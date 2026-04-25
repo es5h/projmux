@@ -564,13 +564,15 @@ func isNoSelectionExit(err error) bool {
 	if errors.As(err, &exitErr) {
 		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
 			switch status.ExitStatus() {
-			case 1, 130:
+			case 1, 129, 130:
 				return true
 			}
 		}
 	}
 	message := err.Error()
-	return strings.Contains(message, "exit status 1") || strings.Contains(message, "exit status 130")
+	return strings.Contains(message, "exit status 1") ||
+		strings.Contains(message, "exit status 129") ||
+		strings.Contains(message, "exit status 130")
 }
 
 func readExternalCommand(ctx context.Context, name string, args ...string) ([]byte, error) {

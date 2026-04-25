@@ -132,6 +132,25 @@ func TestAISplitSelectiveTreatsCancelledPickerAsNoOp(t *testing.T) {
 	}
 }
 
+func TestAISplitSelectiveTreatsClosedPopupAsNoOp(t *testing.T) {
+	home := t.TempDir()
+	cmd := testAICommand(home)
+	cmd.executable = func() (string, error) { return "/tmp/projmux", nil }
+	cmd.lookupEnv = func(name string) string {
+		if name == "TMUX" {
+			return "/tmp/tmux"
+		}
+		return ""
+	}
+	cmd.runCommand = func(context.Context, string, ...string) error {
+		return errors.New("exit status 129")
+	}
+
+	if err := cmd.Run([]string{"split", "right"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run split closed popup error = %v, want nil", err)
+	}
+}
+
 func TestAISplitShellUsesTmuxSplitWindow(t *testing.T) {
 	home := t.TempDir()
 	work := filepath.Join(home, "work")

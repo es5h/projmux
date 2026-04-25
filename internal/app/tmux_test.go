@@ -175,6 +175,25 @@ func TestAppRunTmuxPopupToggleOpensStandaloneSidebar(t *testing.T) {
 	}
 }
 
+func TestAppRunTmuxPopupToggleTreatsClosedPopupAsNoOp(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingTmuxRunner{
+		formats: map[string]string{
+			"#{client_tty}": "/dev/pts/projmux-test-close",
+		},
+		err: errors.New("tmux display-popup: exit status 129"),
+	}
+	cmd := &tmuxCommand{
+		runner:     runner,
+		executable: func() (string, error) { return "/tmp/projmux", nil },
+	}
+
+	if err := cmd.Run([]string{"popup-toggle", "session-popup"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v, want nil", err)
+	}
+}
+
 func TestTmuxPrintConfigUsesStandaloneBindings(t *testing.T) {
 	t.Parallel()
 
@@ -339,6 +358,7 @@ func (s *stubTmuxPopupClient) DisplayPopupWithOptions(_ context.Context, command
 type recordingTmuxRunner struct {
 	formats map[string]string
 	calls   []recordedTmuxCall
+	err     error
 }
 
 type recordedTmuxCall struct {
@@ -350,6 +370,9 @@ func (r *recordingTmuxRunner) Run(_ context.Context, name string, args ...string
 	r.calls = append(r.calls, recordedTmuxCall{name: name, args: append([]string(nil), args...)})
 	if name == "tmux" && len(args) == 4 && reflect.DeepEqual(args[:3], []string{"display-message", "-p", "-F"}) {
 		return []byte(r.formats[args[3]] + "\n"), nil
+	}
+	if r.err != nil {
+		return nil, r.err
 	}
 	return nil, nil
 }
