@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 
 	inttmux "github.com/es5h/projmux/internal/integrations/tmux"
@@ -17,18 +19,31 @@ type tmuxPopupClient interface {
 	DisplayPopupWithOptions(ctx context.Context, command string, options inttmux.PopupOptions) error
 }
 
+type tmuxRunner interface {
+	Run(ctx context.Context, name string, args ...string) ([]byte, error)
+}
+
 type tmuxCommand struct {
 	popup         tmuxPopupClient
 	executable    func() (string, error)
+	runner        tmuxRunner
+	lookupEnv     func(string) string
+	writeFile     func(string, []byte, os.FileMode) error
+	readFile      func(string) ([]byte, error)
 	popupOptions  func(sessionName string) inttmux.PopupOptions
 	switchPopup   func() inttmux.PopupOptions
 	sessionsPopup func() inttmux.PopupOptions
 }
 
 func newTmuxCommand() *tmuxCommand {
+	runner := inttmux.ExecRunner{}
 	return &tmuxCommand{
 		popup:         inttmux.NewClient(inttmux.ExecRunner{}),
 		executable:    os.Executable,
+		runner:        runner,
+		lookupEnv:     os.Getenv,
+		writeFile:     os.WriteFile,
+		readFile:      os.ReadFile,
 		popupOptions:  defaultPopupPreviewOptions,
 		switchPopup:   defaultPopupSwitchOptions,
 		sessionsPopup: defaultPopupSessionsOptions,
@@ -55,6 +70,12 @@ func (c *tmuxCommand) Run(args []string, stdout, stderr io.Writer) error {
 		return c.runPopupSwitch(fs.Args()[1:], stderr)
 	case "popup-sessions":
 		return c.runPopupSessions(fs.Args()[1:], stderr)
+	case "popup-toggle":
+		return c.runPopupToggle(fs.Args()[1:], stderr)
+	case "print-config":
+		return c.runPrintConfig(fs.Args()[1:], stdout, stderr)
+	case "install":
+		return c.runInstall(fs.Args()[1:], stdout, stderr)
 	case "help", "--help", "-h":
 		printTmuxUsage(stdout)
 		return nil
@@ -111,6 +132,71 @@ func parseTmuxPopupPreviewArgs(args []string, stderr io.Writer) (string, error) 
 	}
 
 	return sessionName, nil
+}
+
+func (c *tmuxCommand) runPopupToggle(args []string, stderr io.Writer) error {
+	mode, err := parseTmuxPopupToggleArgs(args, stderr)
+	if err != nil {
+		return err
+	}
+	if c.runner == nil {
+		return errors.New("configure tmux runner: tmux runner is not configured")
+	}
+	if c.executable == nil {
+		return errors.New("configure tmux popup executable: tmux popup executable resolver is not configured")
+	}
+
+	binaryPath, err := c.executable()
+	if err != nil {
+		return fmt.Errorf("resolve tmux popup executable: %w", err)
+	}
+
+	ctx := context.Background()
+	popupCtx := c.popupContext(ctx)
+	marker := popupMarkerPath(popupCtx.ClientKey, mode.Canonical)
+	if _, err := os.Stat(marker); err == nil {
+		if err := c.closePopup(ctx, popupCtx.OriginPane); err != nil {
+			return err
+		}
+		_ = os.Remove(marker)
+		return nil
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("stat tmux popup marker: %w", err)
+	}
+
+	command, options, err := buildPopupToggle(mode, binaryPath, marker, popupCtx)
+	if err != nil {
+		return err
+	}
+	displayArgs, err := inttmux.BuildDisplayPopupArgs(command, options)
+	if err != nil {
+		return err
+	}
+	if _, err := c.runner.Run(ctx, "tmux", displayArgs...); err != nil {
+		_ = os.Remove(marker)
+		return fmt.Errorf("display tmux popup-toggle %q: %w", mode.Raw, err)
+	}
+	return nil
+}
+
+func parseTmuxPopupToggleArgs(args []string, stderr io.Writer) (tmuxPopupToggleMode, error) {
+	if len(args) != 1 {
+		printTmuxUsage(stderr)
+		return tmuxPopupToggleMode{}, fmt.Errorf("tmux popup-toggle requires exactly 1 argument: <mode>")
+	}
+
+	raw := strings.TrimSpace(args[0])
+	switch raw {
+	case "session-popup", "sessionizer", "sessionizer-sidebar", "ai-split-settings":
+		return tmuxPopupToggleMode{Raw: raw, Canonical: raw}, nil
+	case "ai-split-picker-right":
+		return tmuxPopupToggleMode{Raw: raw, Canonical: "ai-split-picker", Direction: "right"}, nil
+	case "ai-split-picker-down":
+		return tmuxPopupToggleMode{Raw: raw, Canonical: "ai-split-picker", Direction: "down"}, nil
+	default:
+		printTmuxUsage(stderr)
+		return tmuxPopupToggleMode{}, fmt.Errorf("unknown tmux popup-toggle mode: %s", raw)
+	}
 }
 
 func (c *tmuxCommand) runPopupSwitch(args []string, stderr io.Writer) error {
@@ -186,6 +272,61 @@ func (c *tmuxCommand) runPopupSessions(args []string, stderr io.Writer) error {
 	return nil
 }
 
+func (c *tmuxCommand) runPrintConfig(args []string, stdout, stderr io.Writer) error {
+	binaryPath, err := c.parseConfigBinary(args, "tmux print-config", stderr)
+	if err != nil {
+		return err
+	}
+	_, err = io.WriteString(stdout, tmuxStandaloneConfig(binaryPath))
+	return err
+}
+
+func (c *tmuxCommand) runInstall(args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("tmux install", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	binaryOverride := fs.String("bin", "", "projmux binary path to write into the tmux snippet")
+	configPath := fs.String("config", "", "tmux config file to update")
+	includePath := fs.String("include", "", "standalone snippet path to write")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		printTmuxUsage(stderr)
+		return errors.New("tmux install does not accept positional arguments")
+	}
+
+	binaryPath, err := c.resolveConfigBinary(*binaryOverride)
+	if err != nil {
+		return err
+	}
+	include := c.expandHome(strings.TrimSpace(*includePath))
+	if include == "" {
+		include = c.expandHome("~/.config/tmux/projmux.conf")
+	}
+	config := c.expandHome(strings.TrimSpace(*configPath))
+	if config == "" {
+		config = c.expandHome("~/.tmux.conf")
+	}
+
+	if c.writeFile == nil {
+		return errors.New("configure tmux install writer: file writer is not configured")
+	}
+	if err := os.MkdirAll(filepath.Dir(include), 0o755); err != nil {
+		return fmt.Errorf("create tmux include directory: %w", err)
+	}
+	if err := c.writeFile(include, []byte(tmuxStandaloneConfig(binaryPath)), 0o644); err != nil {
+		return fmt.Errorf("write tmux standalone config: %w", err)
+	}
+
+	sourceLine := "source-file " + tmuxConfigQuote(include)
+	if err := c.ensureConfigIncludes(config, sourceLine); err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintf(stdout, "wrote %s\nincluded from %s\n", include, config)
+	return err
+}
+
 func defaultPopupPreviewOptions(sessionName string) inttmux.PopupOptions {
 	return inttmux.PopupOptions{
 		Width:         "80%",
@@ -218,4 +359,319 @@ func printTmuxUsage(w io.Writer) {
 	fmt.Fprintln(w, "  projmux tmux popup-preview <session>")
 	fmt.Fprintln(w, "  projmux tmux popup-switch")
 	fmt.Fprintln(w, "  projmux tmux popup-sessions")
+	fmt.Fprintln(w, "  projmux tmux popup-toggle <session-popup|sessionizer|sessionizer-sidebar|ai-split-picker-right|ai-split-picker-down|ai-split-settings>")
+	fmt.Fprintln(w, "  projmux tmux print-config [--bin <path>]")
+	fmt.Fprintln(w, "  projmux tmux install [--bin <path>] [--config <path>] [--include <path>]")
+}
+
+type tmuxPopupToggleMode struct {
+	Raw       string
+	Canonical string
+	Direction string
+}
+
+type tmuxPopupContext struct {
+	ClientKey     string
+	OriginPane    string
+	OriginSession string
+	ContextDir    string
+	ClientWidth   int
+	ClientHeight  int
+}
+
+func (c *tmuxCommand) popupContext(ctx context.Context) tmuxPopupContext {
+	clientKey := c.tmuxFormat(ctx, "#{client_tty}")
+	if clientKey == "" {
+		clientKey = c.tmuxFormat(ctx, "#{client_pid}")
+	}
+	if clientKey == "" {
+		clientKey = "unknown"
+	}
+
+	return tmuxPopupContext{
+		ClientKey:     sanitizePopupKey(clientKey),
+		OriginPane:    c.tmuxFormat(ctx, "#{pane_id}"),
+		OriginSession: c.tmuxFormat(ctx, "#S"),
+		ContextDir:    c.tmuxFormat(ctx, "#{pane_current_path}"),
+		ClientWidth:   parseTmuxPositiveInt(c.tmuxFormat(ctx, "#{client_width}")),
+		ClientHeight:  parseTmuxPositiveInt(c.tmuxFormat(ctx, "#{client_height}")),
+	}
+}
+
+func (c *tmuxCommand) tmuxFormat(ctx context.Context, format string) string {
+	if c.runner == nil {
+		return ""
+	}
+	output, err := c.runner.Run(ctx, "tmux", "display-message", "-p", "-F", format)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
+}
+
+func (c *tmuxCommand) closePopup(ctx context.Context, targetPane string) error {
+	args := []string{"display-popup"}
+	if strings.TrimSpace(targetPane) != "" {
+		args = append(args, "-t", targetPane)
+	}
+	args = append(args, "-C")
+	if _, err := c.runner.Run(ctx, "tmux", args...); err != nil {
+		return fmt.Errorf("close tmux popup: %w", err)
+	}
+	return nil
+}
+
+func buildPopupToggle(mode tmuxPopupToggleMode, binaryPath, marker string, ctx tmuxPopupContext) (string, inttmux.PopupOptions, error) {
+	options := inttmux.PopupOptions{
+		Target:        ctx.OriginPane,
+		CloseBehavior: inttmux.PopupCloseOnExit,
+	}
+	commandArgs := []string{}
+	env := map[string]string{}
+	cwd := ""
+
+	switch mode.Raw {
+	case "session-popup":
+		options.Width = popupSize(ctx.ClientWidth, 80, 120)
+		options.Height = popupSize(ctx.ClientHeight, 70, 28)
+		options.Title = "projmux sessions"
+		commandArgs = []string{"sessions", "--ui=popup"}
+	case "sessionizer":
+		options.Width = popupSize(ctx.ClientWidth, 80, 120)
+		options.Height = popupSize(ctx.ClientHeight, 70, 28)
+		options.Title = "projmux switch"
+		cwd = ctx.ContextDir
+		env["TMUX_SESSIONIZER_CONTEXT_DIR"] = ctx.ContextDir
+		env["TMUX_SESSIONIZER_CONTEXT_SESSION"] = ctx.OriginSession
+		env["TMUX_SESSIONIZER_CONTEXT_PANE"] = ctx.OriginPane
+		commandArgs = []string{"switch", "--ui=popup"}
+	case "sessionizer-sidebar":
+		options.Width = popupSize(ctx.ClientWidth, 20, 36)
+		options.Height = popupSize(ctx.ClientHeight, 100, 20)
+		options.Title = "projmux sidebar"
+		options.X = "0"
+		options.Y = "0"
+		cwd = ctx.ContextDir
+		env["TMUX_SESSIONIZER_CONTEXT_DIR"] = ctx.ContextDir
+		env["TMUX_SESSIONIZER_CONTEXT_SESSION"] = ctx.OriginSession
+		env["TMUX_SESSIONIZER_CONTEXT_PANE"] = ctx.OriginPane
+		commandArgs = []string{"switch", "--ui=sidebar"}
+	case "ai-split-picker-right", "ai-split-picker-down":
+		options.Width = popupSize(ctx.ClientWidth, 40, 64)
+		options.Height = popupSize(ctx.ClientHeight, 30, 12)
+		options.Title = "projmux ai launch"
+		cwd = ctx.ContextDir
+		env["TMUX_SPLIT_TARGET_PANE"] = ctx.OriginPane
+		env["TMUX_SPLIT_CONTEXT_DIR"] = ctx.ContextDir
+		commandArgs = []string{"ai", "picker", "--inside", mode.Direction}
+	case "ai-split-settings":
+		options.Width = popupSize(ctx.ClientWidth, 55, 80)
+		options.Height = popupSize(ctx.ClientHeight, 40, 14)
+		options.Title = "projmux ai settings"
+		commandArgs = []string{"ai", "settings"}
+	default:
+		return "", inttmux.PopupOptions{}, fmt.Errorf("unknown tmux popup-toggle mode: %s", mode.Raw)
+	}
+
+	options.Cwd = cwd
+	options.Env = env
+	return buildMarkedPopupCommand(binaryPath, commandArgs, marker, cwd, env), options, nil
+}
+
+func (c *tmuxCommand) parseConfigBinary(args []string, name string, stderr io.Writer) (string, error) {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	binaryOverride := fs.String("bin", "", "projmux binary path to write into the tmux snippet")
+	if err := fs.Parse(args); err != nil {
+		return "", err
+	}
+	if fs.NArg() != 0 {
+		printTmuxUsage(stderr)
+		return "", fmt.Errorf("%s does not accept positional arguments", name)
+	}
+	return c.resolveConfigBinary(*binaryOverride)
+}
+
+func (c *tmuxCommand) resolveConfigBinary(override string) (string, error) {
+	if binaryPath := strings.TrimSpace(override); binaryPath != "" {
+		return binaryPath, nil
+	}
+	if c.executable == nil {
+		return "", errors.New("configure tmux executable: tmux executable resolver is not configured")
+	}
+	binaryPath, err := c.executable()
+	if err != nil {
+		return "", fmt.Errorf("resolve tmux executable: %w", err)
+	}
+	return binaryPath, nil
+}
+
+func (c *tmuxCommand) ensureConfigIncludes(config, sourceLine string) error {
+	if c.writeFile == nil {
+		return errors.New("configure tmux install writer: file writer is not configured")
+	}
+	if err := os.MkdirAll(filepath.Dir(config), 0o755); err != nil {
+		return fmt.Errorf("create tmux config directory: %w", err)
+	}
+
+	var existing []byte
+	if c.readFile != nil {
+		content, err := c.readFile(config)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("read tmux config: %w", err)
+		}
+		if err == nil {
+			existing = content
+		}
+	}
+
+	if strings.Contains(string(existing), sourceLine) {
+		return nil
+	}
+
+	next := string(existing)
+	if strings.TrimSpace(next) == "" {
+		next = "# projmux standalone tmux bindings\n" + sourceLine + "\n"
+	} else {
+		if !strings.HasSuffix(next, "\n") {
+			next += "\n"
+		}
+		next += "\n# projmux standalone tmux bindings\n" + sourceLine + "\n"
+	}
+	if err := c.writeFile(config, []byte(next), 0o644); err != nil {
+		return fmt.Errorf("write tmux config include: %w", err)
+	}
+	return nil
+}
+
+func (c *tmuxCommand) expandHome(path string) string {
+	if strings.TrimSpace(path) == "" {
+		return ""
+	}
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		home := envValue(c.lookupEnv, "HOME")
+		if home == "" {
+			return path
+		}
+		if path == "~" {
+			return home
+		}
+		return filepath.Join(home, strings.TrimPrefix(path, "~/"))
+	}
+	return path
+}
+
+func tmuxStandaloneConfig(binaryPath string) string {
+	bin := tmuxShellQuote(binaryPath)
+	lines := []string{
+		"# Generated by projmux. Safe to source from ~/.tmux.conf.",
+		"set -s user-keys[0] \"\\033[9001u\"",
+		"set -s user-keys[1] \"\\033[9002u\"",
+		"set -s user-keys[2] \"\\033[9003u\"",
+		"set -s user-keys[3] \"\\033[9004u\"",
+		"set -s user-keys[4] \"\\033[9005u\"",
+		"set -s user-keys[5] \"\\033[9006u\"",
+		"set -s user-keys[6] \"\\033[9007u\"",
+		"unbind-key -q -n M-1",
+		"unbind-key -q -n M-2",
+		"unbind-key -q -n M-3",
+		"unbind-key -q -n M-4",
+		"unbind-key -q -n M-5",
+		"bind-key -n M-1 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle sessionizer-sidebar"),
+		"bind-key -n M-2 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle session-popup"),
+		"bind-key -n M-3 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle sessionizer"),
+		"bind-key -n M-4 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle ai-split-picker-right"),
+		"bind-key -n M-5 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle ai-split-settings"),
+		"bind-key -n User0 run-shell " + tmuxConfigQuote(bin+" ai split right"),
+		"bind-key -n User1 run-shell " + tmuxConfigQuote(bin+" ai split down"),
+		"bind-key -n User5 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle ai-split-picker-right"),
+		"bind-key -n User6 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle ai-split-settings"),
+		"bind-key b run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle session-popup"),
+		"bind-key f run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle sessionizer"),
+		"bind-key F run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle sessionizer-sidebar"),
+		"bind-key g run-shell " + tmuxConfigQuote(bin+" current"),
+		"bind-key r run-shell " + tmuxConfigQuote(bin+" ai split right"),
+		"bind-key l run-shell " + tmuxConfigQuote(bin+" ai split down"),
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func buildMarkedPopupCommand(binaryPath string, args []string, marker, cwd string, env map[string]string) string {
+	parts := []string{"touch -- " + tmuxShellQuote(marker)}
+	if strings.TrimSpace(cwd) != "" {
+		parts = append(parts, "cd -- "+tmuxShellQuote(cwd))
+	}
+
+	command := []string{}
+	for _, key := range sortedStringKeys(env) {
+		value := env[key]
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		command = append(command, key+"="+tmuxShellQuote(value))
+	}
+	command = append(command, tmuxShellQuote(binaryPath))
+	for _, arg := range args {
+		command = append(command, tmuxShellQuote(arg))
+	}
+	parts = append(parts, strings.Join(command, " "))
+	parts = append(parts, "code=$?")
+	parts = append(parts, "rm -f -- "+tmuxShellQuote(marker))
+	parts = append(parts, "exit $code")
+	return strings.Join(parts, "; ")
+}
+
+func popupMarkerPath(clientKey, mode string) string {
+	return filepath.Join(os.TempDir(), "projmux-tmux-popup-"+sanitizePopupKey(clientKey)+"-"+sanitizePopupKey(mode)+".marker")
+}
+
+func sanitizePopupKey(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.NewReplacer("/", "_", ":", "_", " ", "_").Replace(value)
+	if value == "" {
+		return "unknown"
+	}
+	return value
+}
+
+func popupSize(total, percent, minimum int) string {
+	if total <= 0 {
+		return fmt.Sprintf("%d%%", percent)
+	}
+	value := total * percent / 100
+	if value < minimum {
+		value = minimum
+	}
+	if value > total {
+		value = total
+	}
+	return fmt.Sprintf("%d", value)
+}
+
+func parseTmuxPositiveInt(value string) int {
+	var parsed int
+	if _, err := fmt.Sscanf(strings.TrimSpace(value), "%d", &parsed); err != nil || parsed <= 0 {
+		return 0
+	}
+	return parsed
+}
+
+func sortedStringKeys(values map[string]string) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+func tmuxShellQuote(value string) string {
+	if value == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
+}
+
+func tmuxConfigQuote(value string) string {
+	return "\"" + strings.ReplaceAll(value, "\"", "\\\"") + "\""
 }

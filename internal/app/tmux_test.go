@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	inttmux "github.com/es5h/projmux/internal/integrations/tmux"
@@ -42,7 +46,7 @@ func TestAppRunTmuxPopupPreviewUsesDefaultOptions(t *testing.T) {
 		Title:         "projmux: dev",
 		CloseBehavior: inttmux.PopupCloseOnExit,
 	}
-	if popup.options != wantOptions {
+	if !reflect.DeepEqual(popup.options, wantOptions) {
 		t.Fatalf("popup options = %#v, want %#v", popup.options, wantOptions)
 	}
 }
@@ -78,7 +82,7 @@ func TestAppRunTmuxPopupSwitchUsesCurrentPanePathAndDefaultOptions(t *testing.T)
 		Title:         "projmux switch",
 		CloseBehavior: inttmux.PopupCloseOnExit,
 	}
-	if popup.options != wantOptions {
+	if !reflect.DeepEqual(popup.options, wantOptions) {
 		t.Fatalf("popup options = %#v, want %#v", popup.options, wantOptions)
 	}
 }
@@ -114,8 +118,122 @@ func TestAppRunTmuxPopupSessionsUsesDefaultOptions(t *testing.T) {
 		Title:         "projmux sessions",
 		CloseBehavior: inttmux.PopupCloseOnExit,
 	}
-	if popup.options != wantOptions {
+	if !reflect.DeepEqual(popup.options, wantOptions) {
 		t.Fatalf("popup options = %#v, want %#v", popup.options, wantOptions)
+	}
+}
+
+func TestAppRunTmuxPopupToggleOpensStandaloneSidebar(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingTmuxRunner{formats: map[string]string{
+		"#{client_tty}":        "/dev/pts/projmux-test-sidebar",
+		"#{pane_id}":           "%1",
+		"#S":                   "work",
+		"#{pane_current_path}": "/tmp/work tree",
+		"#{client_width}":      "200",
+		"#{client_height}":     "50",
+	}}
+	cmd := &tmuxCommand{
+		runner:     runner,
+		executable: func() (string, error) { return "/tmp/proj mux/bin/projmux", nil },
+	}
+
+	if err := cmd.Run([]string{"popup-toggle", "sessionizer-sidebar"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	got := runner.calls[len(runner.calls)-1]
+	wantPrefix := []string{
+		"display-popup",
+		"-t", "%1",
+		"-E",
+		"-d", "/tmp/work tree",
+		"-e", "TMUX_SESSIONIZER_CONTEXT_DIR=/tmp/work tree",
+		"-e", "TMUX_SESSIONIZER_CONTEXT_PANE=%1",
+		"-e", "TMUX_SESSIONIZER_CONTEXT_SESSION=work",
+		"-x", "0",
+		"-y", "0",
+		"-w", "40",
+		"-h", "50",
+		"-T", "projmux sidebar",
+	}
+	if got.name != "tmux" || len(got.args) < len(wantPrefix)+1 || !reflect.DeepEqual(got.args[:len(wantPrefix)], wantPrefix) {
+		t.Fatalf("display call = %#v, want prefix %#v", got, wantPrefix)
+	}
+	command := got.args[len(got.args)-1]
+	for _, want := range []string{
+		"touch -- '/tmp/projmux-tmux-popup-_dev_pts_projmux-test-sidebar-sessionizer-sidebar.marker'",
+		"cd -- '/tmp/work tree'",
+		"TMUX_SESSIONIZER_CONTEXT_SESSION='work'",
+		"TMUX_SESSIONIZER_CONTEXT_PANE='%1'",
+		"'/tmp/proj mux/bin/projmux' 'switch' '--ui=sidebar'",
+	} {
+		if !strings.Contains(command, want) {
+			t.Fatalf("popup command = %q, want substring %q", command, want)
+		}
+	}
+}
+
+func TestTmuxPrintConfigUsesStandaloneBindings(t *testing.T) {
+	t.Parallel()
+
+	cmd := &tmuxCommand{executable: func() (string, error) { return "/tmp/proj mux/bin/projmux", nil }}
+	var stdout bytes.Buffer
+	if err := cmd.Run([]string{"print-config"}, &stdout, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	output := stdout.String()
+	for _, want := range []string{
+		"bind-key -n M-1 run-shell",
+		"'/tmp/proj mux/bin/projmux' tmux popup-toggle sessionizer-sidebar",
+		"bind-key -n User0 run-shell",
+		"'/tmp/proj mux/bin/projmux' ai split right",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("print-config output = %q, want substring %q", output, want)
+		}
+	}
+}
+
+func TestTmuxInstallWritesSnippetAndIncludesIt(t *testing.T) {
+	t.Parallel()
+
+	home := t.TempDir()
+	configPath := filepath.Join(home, ".tmux.conf")
+	includePath := filepath.Join(home, ".config", "tmux", "projmux.conf")
+	if err := os.WriteFile(configPath, []byte("set -g mouse on\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := &tmuxCommand{
+		executable: func() (string, error) { return "/tmp/projmux", nil },
+		lookupEnv:  func(name string) string { return home },
+		writeFile:  os.WriteFile,
+		readFile:   os.ReadFile,
+	}
+
+	var stdout bytes.Buffer
+	if err := cmd.Run([]string{"install", "--config", configPath, "--include", includePath}, &stdout, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	snippet, err := os.ReadFile(includePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(snippet), "'/tmp/projmux' tmux popup-toggle sessionizer") {
+		t.Fatalf("snippet = %q, want projmux binding", string(snippet))
+	}
+	config, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(config), "source-file \""+includePath+"\"") {
+		t.Fatalf("config = %q, want source-file include", string(config))
+	}
+	if !strings.Contains(stdout.String(), "included from "+configPath) {
+		t.Fatalf("stdout = %q, want install summary", stdout.String())
 	}
 }
 
@@ -133,6 +251,8 @@ func TestTmuxCommandRejectsInvalidUsage(t *testing.T) {
 		{name: "blank session", args: []string{"popup-preview", " "}, want: "tmux popup-preview requires a non-empty <session> argument"},
 		{name: "popup-switch extra args", args: []string{"popup-switch", "extra"}, want: "tmux popup-switch accepts no arguments"},
 		{name: "popup-sessions extra args", args: []string{"popup-sessions", "extra"}, want: "tmux popup-sessions accepts no arguments"},
+		{name: "missing popup-toggle mode", args: []string{"popup-toggle"}, want: "tmux popup-toggle requires exactly 1 argument"},
+		{name: "unknown popup-toggle mode", args: []string{"popup-toggle", "nope"}, want: "unknown tmux popup-toggle mode: nope"},
 	}
 
 	for _, tt := range tests {
@@ -212,4 +332,22 @@ func (s *stubTmuxPopupClient) DisplayPopupWithOptions(_ context.Context, command
 	s.command = command
 	s.options = options
 	return s.err
+}
+
+type recordingTmuxRunner struct {
+	formats map[string]string
+	calls   []recordedTmuxCall
+}
+
+type recordedTmuxCall struct {
+	name string
+	args []string
+}
+
+func (r *recordingTmuxRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	r.calls = append(r.calls, recordedTmuxCall{name: name, args: append([]string(nil), args...)})
+	if name == "tmux" && len(args) == 4 && reflect.DeepEqual(args[:3], []string{"display-message", "-p", "-F"}) {
+		return []byte(r.formats[args[3]] + "\n"), nil
+	}
+	return nil, nil
 }

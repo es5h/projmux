@@ -31,14 +31,19 @@
 
 ### Tmux-facing helper entrypoints
 - `projmux tmux popup-toggle <mode>`
-- `projmux tmux rows <mode>`
-- `projmux tmux preview <target>`
+- `projmux tmux print-config [--bin <path>]`
+- `projmux tmux install [--bin <path>] [--config <path>] [--include <path>]`
 - `projmux tmux popup-switch`
 - `projmux tmux popup-sessions`
 - `projmux tmux popup-preview <session>`
 
 ## Suggested mode mapping
 
+- `projmux tmux popup-toggle sessionizer-sidebar` -> `projmux switch --ui=sidebar`
+- `projmux tmux popup-toggle sessionizer` -> `projmux switch --ui=popup`
+- `projmux tmux popup-toggle session-popup` -> `projmux sessions --ui=popup`
+- `projmux tmux popup-toggle ai-split-picker-right` -> `projmux ai picker --inside right`
+- `projmux tmux popup-toggle ai-split-settings` -> `projmux ai settings`
 - `projmux switch --ui=popup`
 - `projmux switch --ui=sidebar`
 - `projmux sessions --ui=popup`

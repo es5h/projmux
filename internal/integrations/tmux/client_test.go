@@ -1007,6 +1007,46 @@ func TestBuildDisplayPopupArgsMapsExplicitOptions(t *testing.T) {
 	}
 }
 
+func TestBuildDisplayPopupArgsMapsStandalonePopupOptions(t *testing.T) {
+	t.Parallel()
+
+	args, err := BuildDisplayPopupArgs("printf hello", PopupOptions{
+		Target: "%1",
+		Cwd:    "/tmp/work",
+		Env: map[string]string{
+			"TMUX_SPLIT_TARGET_PANE": "%1",
+			"TMUX_SPLIT_CONTEXT_DIR": "/tmp/work",
+		},
+		X:             "0",
+		Y:             "0",
+		Width:         "40",
+		Height:        "20",
+		Title:         "proj popup",
+		CloseBehavior: PopupCloseOnExit,
+	})
+	if err != nil {
+		t.Fatalf("BuildDisplayPopupArgs returned error: %v", err)
+	}
+
+	want := []string{
+		"display-popup",
+		"-t", "%1",
+		"-E",
+		"-d", "/tmp/work",
+		"-e", "TMUX_SPLIT_CONTEXT_DIR=/tmp/work",
+		"-e", "TMUX_SPLIT_TARGET_PANE=%1",
+		"-x", "0",
+		"-y", "0",
+		"-w", "40",
+		"-h", "20",
+		"-T", "proj popup",
+		"printf hello",
+	}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("BuildDisplayPopupArgs = %#v, want %#v", args, want)
+	}
+}
+
 func TestBuildDisplayPopupArgsRejectsInvalidInput(t *testing.T) {
 	t.Parallel()
 

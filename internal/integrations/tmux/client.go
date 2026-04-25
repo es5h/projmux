@@ -101,6 +101,11 @@ const (
 )
 
 type PopupOptions struct {
+	Target        string
+	Cwd           string
+	Env           map[string]string
+	X             string
+	Y             string
 	Width         string
 	Height        string
 	Title         string
@@ -477,8 +482,23 @@ func BuildDisplayPopupArgs(command string, options PopupOptions) ([]string, erro
 	}
 
 	args := []string{"display-popup"}
+	if resolved.Target != "" {
+		args = append(args, "-t", resolved.Target)
+	}
 	if resolved.CloseBehavior == PopupCloseOnExit {
 		args = append(args, "-E")
+	}
+	if resolved.Cwd != "" {
+		args = append(args, "-d", resolved.Cwd)
+	}
+	for _, key := range sortedEnvKeys(resolved.Env) {
+		args = append(args, "-e", key+"="+resolved.Env[key])
+	}
+	if resolved.X != "" {
+		args = append(args, "-x", resolved.X)
+	}
+	if resolved.Y != "" {
+		args = append(args, "-y", resolved.Y)
 	}
 	if resolved.Width != "" {
 		args = append(args, "-w", resolved.Width)
@@ -766,6 +786,11 @@ func sessionPaneTarget(sessionName, windowIndex, paneIndex string) string {
 
 func resolvePopupOptions(options PopupOptions) (PopupOptions, error) {
 	resolved := PopupOptions{
+		Target:        strings.TrimSpace(options.Target),
+		Cwd:           strings.TrimSpace(options.Cwd),
+		Env:           cleanPopupEnv(options.Env),
+		X:             strings.TrimSpace(options.X),
+		Y:             strings.TrimSpace(options.Y),
 		Width:         strings.TrimSpace(options.Width),
 		Height:        strings.TrimSpace(options.Height),
 		Title:         strings.TrimSpace(options.Title),
@@ -788,6 +813,33 @@ func resolvePopupOptions(options PopupOptions) (PopupOptions, error) {
 	default:
 		return PopupOptions{}, errPopupCloseBehaviorInvalid
 	}
+}
+
+func cleanPopupEnv(env map[string]string) map[string]string {
+	if len(env) == 0 {
+		return nil
+	}
+	cleaned := make(map[string]string, len(env))
+	for key, value := range env {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		cleaned[key] = value
+	}
+	if len(cleaned) == 0 {
+		return nil
+	}
+	return cleaned
+}
+
+func sortedEnvKeys(env map[string]string) []string {
+	keys := make([]string, 0, len(env))
+	for key := range env {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 type recentSession struct {
