@@ -279,7 +279,6 @@ func TestAIStatusSetThinkingMarksPaneBusy(t *testing.T) {
 	}
 
 	want := []recordedAICommand{
-		{name: "tmux", args: []string{"set-option", "-p", "-u", "-t", "%1", "@dotfiles_desktop_notified"}},
 		{name: "tmux", args: []string{"set-option", "-p", "-t", "%1", "@dotfiles_attention_state", "busy"}},
 		{name: "tmux", args: []string{"set-option", "-p", "-u", "-t", "%1", "@dotfiles_attention_ack"}},
 		{name: "tmux", args: []string{"select-pane", "-T", "⠹ codex: repo", "-t", "%1"}},

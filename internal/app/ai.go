@@ -117,7 +117,6 @@ func (c *aiCommand) applyAIStatus(state, paneID string) error {
 	baseTitle := trimAIStatePrefix(currentTitle)
 	switch strings.TrimSpace(state) {
 	case "thinking":
-		_ = c.resetAINotification(paneID)
 		_ = c.run("tmux", "set-option", "-p", "-t", paneID, attentionStateOption, attentionStateBusy)
 		_ = c.run("tmux", "set-option", "-p", "-u", "-t", paneID, attentionAckOption)
 		_ = c.run("tmux", "select-pane", "-T", "⠹ "+baseTitle, "-t", paneID)
