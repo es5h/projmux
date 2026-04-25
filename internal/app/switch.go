@@ -1231,19 +1231,27 @@ func switchPreviewWindow(ui string) string {
 
 func switchPickerFooter(ui string) string {
 	if ui == switchUISidebar {
-		return strings.Join([]string{
+		return projmuxFooter(strings.Join([]string{
 			"Enter: switch/create",
 			"Ctrl-X: kill focused session",
 			"Alt-P: pin/unpin focused directory",
-		}, "\n")
+		}, "\n"))
 	}
-	return strings.Join([]string{
+	return projmuxFooter(strings.Join([]string{
 		"Enter: switch/create previewed target",
 		"Ctrl-X: kill focused session",
 		"Alt-P: pin/unpin focused directory",
 		"Left/Right: preview window",
 		"Alt-Up/Alt-Down: preview pane",
-	}, "\n")
+	}, "\n"))
+}
+
+func projmuxFooter(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "[projmux]"
+	}
+	return "[projmux]\n" + text
 }
 
 func switchSidebarInitialPos(plan switchPlan) int {

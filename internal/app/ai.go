@@ -163,7 +163,7 @@ func (c *aiCommand) runSettings(args []string, stdout, stderr io.Writer) error {
 		Entries:    c.settingsRows(),
 		Prompt:     "AI Setting > ",
 		Header:     "Set Ctrl+Shift+R/L default mode",
-		Footer:     "Enter: set default  |  Esc/Alt+5/Ctrl+Alt+S: close",
+		Footer:     projmuxFooter("Enter: set default  |  Esc/Alt+5/Ctrl+Alt+S: close"),
 		ExpectKeys: []string{"enter"},
 		Bindings: []string{
 			"esc:abort",
@@ -194,7 +194,7 @@ func (c *aiCommand) runAgentPicker(direction string) (intfzf.Result, error) {
 		Entries:    c.agentRows(),
 		Prompt:     "AI Launch > ",
 		Header:     "Split Direction: " + direction + "  |  Choose runtime",
-		Footer:     "Enter: launch  |  Esc/Alt+4/Alt+5/Ctrl+Alt+S: close",
+		Footer:     projmuxFooter("Enter: launch  |  Esc/Alt+4/Alt+5/Ctrl+Alt+S: close"),
 		ExpectKeys: []string{"enter"},
 		Bindings: []string{
 			"esc:abort",

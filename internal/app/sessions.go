@@ -214,11 +214,11 @@ func sessionsPreviewWindow(ui string) string {
 }
 
 func sessionsPickerFooter() string {
-	return strings.Join([]string{
+	return projmuxFooter(strings.Join([]string{
 		"Enter: switch to previewed target",
 		"Left/Right: preview window",
 		"Alt-Up/Alt-Down: preview pane",
-	}, "\n")
+	}, "\n"))
 }
 
 func rowsToEntries(rows []intrender.SessionRow) []intfzf.Entry {
