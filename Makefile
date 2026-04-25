@@ -1,11 +1,17 @@
 GO ?= go
 GOFMT ?= gofmt
+BUILD_DIR ?= .bin
+PROJMUX_BIN ?= $(BUILD_DIR)/projmux
 
 GO_FILES := $(shell find . -type f -name '*.go' \
 	-not -path './.git/*' \
 	-not -path './.wt/*')
 
-.PHONY: fmt fmt-check fix test test-integration test-e2e e2e verify
+.PHONY: fmt fmt-check fix build test test-integration test-e2e e2e verify
+
+build:
+	@mkdir -p $(BUILD_DIR)
+	$(GO) build -o $(PROJMUX_BIN) ./cmd/projmux
 
 fmt:
 	@if [ -n "$(GO_FILES)" ]; then \

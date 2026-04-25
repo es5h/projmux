@@ -1,3 +1,5 @@
 .wt/
 .codex
 .idea/
+/projmux
+/.bin/
