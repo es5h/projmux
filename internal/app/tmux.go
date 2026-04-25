@@ -680,11 +680,41 @@ func tmuxAppConfig(binaryPath string) string {
 		"set -g pane-active-border-style \"fg=colour45\"",
 	}
 	lines = append(lines, strings.Split(strings.TrimSpace(tmuxStandaloneConfig(binaryPath)), "\n")[1:]...)
+	lines = append(lines, tmuxAppKeyBindings()...)
 	lines = append(lines,
 		"set -g status-left \"#[bold,fg=colour16,bg=colour45] projmux #[default] #[bold,fg=colour231,bg=colour24] #S #[default]\"",
 		"set -g status-right "+tmuxConfigQuote("#[fg=colour242]#{=/28/...:pane_current_path}#[fg=colour239]  #("+bin+" status kube)#("+bin+" status git)  %Y-%m-%d %H:%M #[bold,fg=colour16,bg=colour45] app #[default]"),
 	)
 	return strings.Join(lines, "\n") + "\n"
+}
+
+func tmuxAppKeyBindings() []string {
+	return []string{
+		"set -s user-keys[7] \"\\033[9008u\"",
+		"set -s user-keys[8] \"\\033[9009u\"",
+		"set -s user-keys[9] \"\\033[9010u\"",
+		"unbind-key -q -n M-Left",
+		"unbind-key -q -n M-Right",
+		"unbind-key -q -n M-Up",
+		"unbind-key -q -n M-Down",
+		"unbind-key -q -n C-n",
+		"unbind-key -q -n M-S-Left",
+		"unbind-key -q -n M-S-Right",
+		"unbind-key -q -n User7",
+		"unbind-key -q -n User8",
+		"unbind-key -q -n User9",
+		"bind-key -n M-Left select-pane -L",
+		"bind-key -n M-Right select-pane -R",
+		"bind-key -n M-Up select-pane -U",
+		"bind-key -n M-Down select-pane -D",
+		"bind-key -n C-n new-window -c \"#{pane_current_path}\"",
+		"bind-key -n M-S-Left previous-window",
+		"bind-key -n M-S-Right next-window",
+		"bind-key -n User7 new-window -c \"#{pane_current_path}\"",
+		"bind-key -n User8 previous-window",
+		"bind-key -n User9 next-window",
+		"bind-key M if -F \"#{mouse}\" \"set -g mouse off \\; display-message 'tmux mouse: off'\" \"set -g mouse on \\; display-message 'tmux mouse: on'\"",
+	}
 }
 
 func buildMarkedPopupCommand(binaryPath string, args []string, marker, cwd string, env map[string]string) string {
