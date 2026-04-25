@@ -12,43 +12,57 @@ import (
 func RenderPopupPreview(model preview.PopupReadModel) string {
 	var builder strings.Builder
 
-	builder.WriteString("session: ")
-	builder.WriteString(sanitizeCell(model.SessionName))
+	writePopupSection(&builder, "Session")
+	writePopupKV(&builder, "name", sanitizeCell(model.SessionName))
+	writePopupKV(&builder, "windows", sanitizeCell(strconv.Itoa(effectiveWindowCount(model))))
+	writePopupKV(&builder, "pane", formatLegacyPaneSummary(model))
+	if pane, ok := selectedPreviewPane(model); ok {
+		writePopupKV(&builder, "cmd", fallbackUnknown(sanitizeCell(pane.Command)))
+		writePopupKV(&builder, "title", fallbackUnknown(sanitizeCell(pane.Title)))
+		writePopupKV(&builder, "path", fallbackUnknown(sanitizeCell(pane.Path)))
+	}
 	builder.WriteString("\n")
 
-	builder.WriteString("summary: ")
-	builder.WriteString(formatPopupSummary(model))
-	builder.WriteString("\n")
-
-	builder.WriteString("selected: ")
-	builder.WriteString(formatSelectedSummary(model))
-	builder.WriteString("\n")
-
-	builder.WriteString("windows:\n")
+	writePopupSection(&builder, "Windows")
 	writeWindows(&builder, model)
 
-	builder.WriteString("panes:\n")
+	builder.WriteString("\n")
+	writePopupSection(&builder, "Panes")
 	writePanes(&builder, model)
+
+	if snapshot := strings.TrimRight(model.PaneSnapshot, "\r\n"); snapshot != "" {
+		builder.WriteString("\n")
+		writePopupSection(&builder, "Pane Snapshot")
+		writePopupRule(&builder)
+		builder.WriteString(snapshot)
+		builder.WriteString("\n")
+	}
 
 	return builder.String()
 }
 
 func formatPopupSummary(model preview.PopupReadModel) string {
 	var parts []string
-	windowCount := model.WindowCount
-	if windowCount == 0 {
-		windowCount = len(model.Windows)
-	}
-	totalPaneCount := model.TotalPaneCount
-	if totalPaneCount == 0 {
-		totalPaneCount = len(model.Panes)
-	}
-	parts = append(parts, sanitizeCell(strconv.Itoa(windowCount))+"w")
-	parts = append(parts, sanitizeCell(strconv.Itoa(totalPaneCount))+"p")
+	parts = append(parts, sanitizeCell(strconv.Itoa(effectiveWindowCount(model)))+"w")
+	parts = append(parts, sanitizeCell(strconv.Itoa(effectivePaneCount(model)))+"p")
 	if target := formatTargetSummary(model.SelectedWindowIndex, model.SelectedPaneIndex); target != "" {
 		parts = append(parts, target)
 	}
 	return strings.Join(parts, "  ")
+}
+
+func effectiveWindowCount(model preview.PopupReadModel) int {
+	if model.WindowCount > 0 {
+		return model.WindowCount
+	}
+	return len(model.Windows)
+}
+
+func effectivePaneCount(model preview.PopupReadModel) int {
+	if model.TotalPaneCount > 0 {
+		return model.TotalPaneCount
+	}
+	return len(model.Panes)
 }
 
 func formatSelectedSummary(model preview.PopupReadModel) string {
@@ -73,32 +87,38 @@ func formatTargetSummary(windowIndex, paneIndex string) string {
 
 func writeWindows(builder *strings.Builder, model preview.PopupReadModel) {
 	if len(model.Windows) == 0 {
-		builder.WriteString("  (none)\n")
+		builder.WriteString("(none)\n")
 		return
 	}
 
 	selectedWindow := strings.TrimSpace(model.SelectedWindowIndex)
 	for _, window := range model.Windows {
-		builder.WriteString("  ")
-		builder.WriteString(selectionMarker(window.Index == selectedWindow))
-		builder.WriteString(" ")
-		builder.WriteString(formatWindowSummary(window))
+		line := formatWindowSummary(window)
+		if window.Index == selectedWindow {
+			builder.WriteString(highlightPreviewLine(line))
+			builder.WriteString("\n")
+			continue
+		}
+		builder.WriteString(line)
 		builder.WriteString("\n")
 	}
 }
 
 func writePanes(builder *strings.Builder, model preview.PopupReadModel) {
 	if len(model.Panes) == 0 {
-		builder.WriteString("  (none)\n")
+		builder.WriteString("(none)\n")
 		return
 	}
 
 	selectedPane := strings.TrimSpace(model.SelectedPaneIndex)
 	for _, pane := range model.Panes {
-		builder.WriteString("  ")
-		builder.WriteString(selectionMarker(pane.Index == selectedPane && selectedPane != ""))
-		builder.WriteString(" ")
-		builder.WriteString(formatPaneSummary(pane))
+		line := formatPaneSummary(pane)
+		if pane.Index == selectedPane && selectedPane != "" {
+			builder.WriteString(highlightPreviewLine(line))
+			builder.WriteString("\n")
+			continue
+		}
+		builder.WriteString(line)
 		builder.WriteString("\n")
 	}
 }
@@ -111,38 +131,119 @@ func selectionMarker(selected bool) string {
 }
 
 func formatWindowSummary(window preview.Window) string {
-	parts := []string{sanitizeCell(window.Index)}
-
 	name := sanitizeCell(window.Name)
-	if name != "" {
-		parts = append(parts, name)
-	}
-	if window.PaneCount > 0 {
-		parts = append(parts, sanitizeCell(strconv.Itoa(window.PaneCount))+" panes")
+	if name == "" {
+		name = "-"
 	}
 	path := sanitizeCell(window.Path)
-	if path != "" {
-		parts = append(parts, path)
+	if path == "" {
+		path = "-"
 	}
-
-	return strings.Join(parts, " | ")
+	return "[" + sanitizeCell(window.Index) + "] " + padRight(truncateText(name, 18), 18) + " " + padLeft(strconv.Itoa(window.PaneCount), 2) + "p  " + truncateText(path, 40)
 }
 
 func formatPaneSummary(pane preview.Pane) string {
-	parts := []string{sanitizeCell(pane.Index)}
-
 	title := sanitizeCell(pane.Title)
-	if title != "" {
-		parts = append(parts, title)
+	if title == "" {
+		title = "-"
 	}
 	command := sanitizeCell(pane.Command)
-	if command != "" {
-		parts = append(parts, command)
+	if command == "" {
+		command = "-"
 	}
 	path := sanitizeCell(pane.Path)
-	if path != "" {
-		parts = append(parts, path)
+	if path == "" {
+		path = "-"
 	}
 
-	return strings.Join(parts, " | ")
+	return "[" + sanitizeCell(pane.WindowIndex) + "." + sanitizeCell(pane.Index) + "] " + padRight(truncateText(title, 18), 18) + " " + padRight(truncateText(command, 10), 10) + " " + truncateText(path, 32)
+}
+
+func writePopupSection(builder *strings.Builder, title string) {
+	builder.WriteString(ansiBold)
+	builder.WriteString(ansiCyan)
+	builder.WriteString(title)
+	builder.WriteString(ansiReset)
+	builder.WriteString("\n")
+}
+
+func writePopupKV(builder *strings.Builder, key, value string) {
+	builder.WriteString("  ")
+	builder.WriteString(ansiDim)
+	builder.WriteString(key)
+	builder.WriteString(ansiReset)
+	builder.WriteString("  ")
+	builder.WriteString(value)
+	builder.WriteString("\n")
+}
+
+func writePopupRule(builder *strings.Builder) {
+	builder.WriteString(ansiDim)
+	builder.WriteString(strings.Repeat("─", 64))
+	builder.WriteString(ansiReset)
+	builder.WriteString("\n")
+}
+
+func highlightPreviewLine(line string) string {
+	return ansiBold + ansiGreen + line + ansiReset
+}
+
+func formatLegacyPaneSummary(model preview.PopupReadModel) string {
+	pane := sanitizeCell(model.SelectedPaneIndex)
+	if pane == "" {
+		pane = "?"
+	}
+	window := sanitizeCell(model.SelectedWindowIndex)
+	if window == "" {
+		window = "?"
+	}
+	return pane + " (window " + window + ")"
+}
+
+func selectedPreviewPane(model preview.PopupReadModel) (preview.Pane, bool) {
+	selectedPane := strings.TrimSpace(model.SelectedPaneIndex)
+	for _, pane := range model.Panes {
+		if selectedPane != "" && pane.Index == selectedPane {
+			return pane, true
+		}
+	}
+	return preview.Pane{}, false
+}
+
+func fallbackUnknown(value string) string {
+	if value == "" {
+		return "unknown"
+	}
+	return value
+}
+
+func truncateText(value string, limit int) string {
+	value = sanitizeCell(value)
+	if limit <= 0 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	if limit == 1 {
+		return "…"
+	}
+	return string(runes[:limit-1]) + "…"
+}
+
+func padRight(value string, width int) string {
+	runes := []rune(value)
+	if len(runes) >= width {
+		return value
+	}
+	return value + strings.Repeat(" ", width-len(runes))
+}
+
+func padLeft(value string, width int) string {
+	runes := []rune(value)
+	if len(runes) >= width {
+		return value
+	}
+	return strings.Repeat(" ", width-len(runes)) + value
 }

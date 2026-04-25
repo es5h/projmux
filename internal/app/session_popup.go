@@ -112,7 +112,7 @@ func (c *sessionPopupCommand) runPreview(args []string, stdout, stderr io.Writer
 		return fmt.Errorf("load popup preview panes for %q: %w", sessionName, err)
 	}
 
-	return writeSessionPopupPreview(stdout, sessionName, selection, hasSelection, windows, panes)
+	return writeSessionPopupPreview(context.Background(), inventory, stdout, sessionName, selection, hasSelection, windows, panes)
 }
 
 func (c *sessionPopupCommand) runOpen(args []string, stderr io.Writer) error {
@@ -183,7 +183,7 @@ func (c *sessionPopupCommand) runCyclePane(args []string, stdout, stderr io.Writ
 		return fmt.Errorf("session-popup cycle-pane found no panes for session %q", sessionName)
 	}
 
-	return writeSessionPopupPreview(stdout, sessionName, selectionFromCursor(sessionName, result.Cursor), true, windows, panes)
+	return writeSessionPopupPreview(context.Background(), inventory, stdout, sessionName, selectionFromCursor(sessionName, result.Cursor), true, windows, panes)
 }
 
 func (c *sessionPopupCommand) runCycleWindow(args []string, stdout, stderr io.Writer) error {
@@ -219,7 +219,7 @@ func (c *sessionPopupCommand) runCycleWindow(args []string, stdout, stderr io.Wr
 		return fmt.Errorf("session-popup cycle-window found no windows for session %q", sessionName)
 	}
 
-	return writeSessionPopupPreview(stdout, sessionName, selectionFromCursor(sessionName, result.Cursor), true, windows, panes)
+	return writeSessionPopupPreview(context.Background(), inventory, stdout, sessionName, selectionFromCursor(sessionName, result.Cursor), true, windows, panes)
 }
 
 func selectionFromCursor(sessionName string, cursor corepreview.Cursor) corepreview.Selection {
@@ -230,7 +230,7 @@ func selectionFromCursor(sessionName string, cursor corepreview.Cursor) coreprev
 	}
 }
 
-func writeSessionPopupPreview(stdout io.Writer, sessionName string, selection corepreview.Selection, hasSelection bool, windows []corepreview.Window, panes []corepreview.Pane) error {
+func writeSessionPopupPreview(ctx context.Context, inventory previewInventory, stdout io.Writer, sessionName string, selection corepreview.Selection, hasSelection bool, windows []corepreview.Window, panes []corepreview.Pane) error {
 	model := corepreview.BuildPopupReadModel(corepreview.PopupReadModelInputs{
 		SessionName:        sessionName,
 		StoredSelection:    selection,
@@ -238,9 +238,48 @@ func writeSessionPopupPreview(stdout io.Writer, sessionName string, selection co
 		Windows:            windows,
 		Panes:              panes,
 	})
+	model.PaneSnapshot = capturePaneSnapshot(ctx, inventory, model, -80)
 
 	_, err := io.WriteString(stdout, intrender.RenderPopupPreview(model))
 	return err
+}
+
+func capturePaneSnapshot(ctx context.Context, inventory previewInventory, model corepreview.PopupReadModel, startLine int) string {
+	capturer, ok := inventory.(previewPaneCapturer)
+	if !ok {
+		return ""
+	}
+	target := selectedPaneTarget(model)
+	if target == "" {
+		return ""
+	}
+	snapshot, err := capturer.CapturePane(ctx, target, startLine)
+	if err != nil {
+		return ""
+	}
+	return snapshot
+}
+
+func selectedPaneTarget(model corepreview.PopupReadModel) string {
+	selectedPaneIndex := strings.TrimSpace(model.SelectedPaneIndex)
+	if selectedPaneIndex == "" {
+		return ""
+	}
+	for _, pane := range model.Panes {
+		if pane.Index != selectedPaneIndex {
+			continue
+		}
+		if id := strings.TrimSpace(pane.ID); id != "" {
+			return id
+		}
+		windowIndex := strings.TrimSpace(model.SelectedWindowIndex)
+		sessionName := strings.TrimSpace(model.SessionName)
+		if sessionName == "" || windowIndex == "" {
+			return ""
+		}
+		return sessionName + ":" + windowIndex + "." + selectedPaneIndex
+	}
+	return ""
 }
 
 func (c *sessionPopupCommand) requireStore() (sessionPopupStore, error) {

@@ -12,6 +12,7 @@ type PopupReadModel struct {
 	SelectedPaneIndex   string
 	Windows             []Window
 	Panes               []Pane
+	PaneSnapshot        string
 }
 
 // PopupReadModelInputs captures the pure inputs needed to derive popup state.

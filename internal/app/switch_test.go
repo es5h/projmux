@@ -86,13 +86,13 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 	if got, want := gotRunnerOptions.UI, switchUIPopup; got != want {
 		t.Fatalf("runner UI = %q, want %q", got, want)
 	}
-	if got, want := gotRunnerOptions.ExpectKeys, []string{switchTagExpectKey, switchPinExpectKey}; !equalStrings(got, want) {
+	if got, want := gotRunnerOptions.ExpectKeys, []string{switchKillExpectKey, switchPinExpectKey}; !equalStrings(got, want) {
 		t.Fatalf("runner expect keys = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Prompt, "› "; got != want {
 		t.Fatalf("runner prompt = %q, want %q", got, want)
 	}
-	if got, want := gotRunnerOptions.Footer, "Enter: switch/create previewed target\nAlt-T: tag focused directory\nAlt-P: pin/unpin focused directory\nLeft/Right: preview window\nAlt-Up/Alt-Down: preview pane"; got != want {
+	if got, want := gotRunnerOptions.Footer, "Enter: switch/create previewed target\nCtrl-X: kill focused session\nAlt-P: pin/unpin focused directory\nLeft/Right: preview window\nAlt-Up/Alt-Down: preview pane"; got != want {
 		t.Fatalf("runner footer = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.PreviewCommand, "exec '/tmp/projmux' 'switch' 'preview' '--ui=popup' {2}"; got != want {
@@ -102,6 +102,11 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 		t.Fatalf("runner preview window = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Bindings, []string{
+		"esc:abort",
+		"ctrl-n:abort",
+		"alt-1:abort",
+		"alt-2:abort",
+		"alt-3:abort",
 		"left:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-window' {2} 'prev')+refresh-preview",
 		"right:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-window' {2} 'next')+refresh-preview",
 		"alt-up:execute-silent(exec '/tmp/projmux' 'switch' 'cycle-pane' {2} 'prev')+refresh-preview",
@@ -113,9 +118,9 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 		t.Fatalf("runner candidates = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Entries, []intfzf.Entry{
-		{Label: "dotfiles  [new]  ~", Value: "/home/tester"},
-		{Label: "dotfiles  [new]  ~/dotfiles", Value: "/home/tester/dotfiles"},
-		{Label: "Settings", Value: switchSettingsSentinel},
+		{Label: "[ ]     \x1b[33m[New]\x1b[0m  tester  ~", Value: "/home/tester"},
+		{Label: "[ ]     \x1b[33m[New]\x1b[0m  dotfiles  ~/dotfiles", Value: "/home/tester/dotfiles"},
+		{Label: "[ ]   \x1b[1m\x1b[36m[Settings]\x1b[0m        \x1b[2mmanage pinned directories\x1b[0m", Value: switchSettingsSentinel},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
 	}
@@ -164,7 +169,7 @@ func TestSwitchCommandSupportsSidebarUI(t *testing.T) {
 	if got, want := gotRunnerOptions.Prompt, "› "; got != want {
 		t.Fatalf("runner prompt = %q, want %q", got, want)
 	}
-	if got, want := gotRunnerOptions.Footer, "Enter: switch/create\nAlt-T: tag focused directory\nAlt-P: pin/unpin focused directory"; got != want {
+	if got, want := gotRunnerOptions.Footer, "Enter: switch/create\nCtrl-X: kill focused session\nAlt-P: pin/unpin focused directory"; got != want {
 		t.Fatalf("runner footer = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.PreviewCommand, "exec '/tmp/projmux' 'switch' 'preview' '--ui=sidebar' {2}"; got != want {
@@ -174,12 +179,17 @@ func TestSwitchCommandSupportsSidebarUI(t *testing.T) {
 		t.Fatalf("runner preview window = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Bindings, []string{
+		"esc:abort",
+		"ctrl-n:abort",
+		"alt-1:abort",
+		"alt-2:abort",
+		"alt-3:abort",
 		"focus:execute-silent(exec '/tmp/projmux' 'switch' 'sidebar-focus' {2})",
 	}; !equalStrings(got, want) {
 		t.Fatalf("runner bindings = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Entries, []intfzf.Entry{
-		{Label: "    tmp-app \x1b[2m/tmp/app\x1b[0m", Value: "/tmp/app"},
+		{Label: "    app \x1b[2m/tmp/app\x1b[0m", Value: "/tmp/app"},
 		{Label: "  \x1b[1m\x1b[36mSettings\x1b[0m  \x1b[2mmanage pinned directories\x1b[0m", Value: switchSettingsSentinel},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
@@ -229,7 +239,12 @@ func TestSwitchCommandSidebarUsesContextSessionForInitialPosition(t *testing.T) 
 	}
 
 	if got, want := gotRunnerOptions.Bindings, []string{
-		"start:pos(2)",
+		"esc:abort",
+		"ctrl-n:abort",
+		"alt-1:abort",
+		"alt-2:abort",
+		"alt-3:abort",
+		"start:pos(1)",
 		"focus:execute-silent(exec '/tmp/projmux' 'switch' 'sidebar-focus' {2})",
 	}; !equalStrings(got, want) {
 		t.Fatalf("runner bindings = %q, want %q", got, want)
@@ -264,7 +279,7 @@ func TestSwitchCommandMarksExistingSessionsInRows(t *testing.T) {
 	var gotRunnerOptions intfzf.Options
 	cmd := &switchCommand{
 		discover: func(candidates.Inputs) ([]string, error) {
-			return []string{"/tmp/app"}, nil
+			return []string{"/tmp/new-app", "/tmp/live-app"}, nil
 		},
 		pinStore: func() (switchPinStore, error) { return &stubSwitchPinStore{}, nil },
 		runner: switchRunnerFunc(func(options intfzf.Options) (intfzf.Result, error) {
@@ -272,9 +287,18 @@ func TestSwitchCommandMarksExistingSessionsInRows(t *testing.T) {
 			return intfzf.Result{}, nil
 		}),
 		sessions: &capturingSwitchSessionExecutor{
-			exists: map[string]bool{"tmp-app": true},
+			exists: map[string]bool{"tmp-live-app": true},
 		},
-		identity:   stubSwitchIdentityResolver{name: "tmp-app"},
+		identity: switchIdentityResolverFunc(func(path string) (string, error) {
+			switch path {
+			case "/tmp/live-app":
+				return "tmp-live-app", nil
+			case "/tmp/new-app":
+				return "tmp-new-app", nil
+			default:
+				return "", errors.New("unexpected path")
+			}
+		}),
 		validate:   func(string) error { return nil },
 		homeDir:    func() (string, error) { return "/home/tester", nil },
 		workingDir: func() (string, error) { return "/tmp", nil },
@@ -285,8 +309,9 @@ func TestSwitchCommandMarksExistingSessionsInRows(t *testing.T) {
 	}
 
 	if got, want := gotRunnerOptions.Entries, []intfzf.Entry{
-		{Label: "tmp-app  [existing]  /tmp/app", Value: "/tmp/app"},
-		{Label: "Settings", Value: switchSettingsSentinel},
+		{Label: "[ ]     \x1b[32m[Existing]\x1b[0m  live-app  /tmp/live-app", Value: "/tmp/live-app"},
+		{Label: "[ ]     \x1b[33m[New]\x1b[0m  new-app  /tmp/new-app", Value: "/tmp/new-app"},
+		{Label: "[ ]   \x1b[1m\x1b[36m[Settings]\x1b[0m        \x1b[2mmanage pinned directories\x1b[0m", Value: switchSettingsSentinel},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
 	}
@@ -356,11 +381,11 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 	}
 	wantEntries := []intfzf.Entry{
 		{Label: "    home \x1b[2m~\x1b[0m", Value: fixture.path("home")},
+		{Label: "  \x1b[33m*\x1b[0m app \x1b[2m" + fixture.path("pins/app") + "\x1b[0m", Value: fixture.path("pins/app")},
 		{Label: "    dotfiles \x1b[2m~/dotfiles\x1b[0m", Value: fixture.path("home/dotfiles")},
-		{Label: "  \x1b[33m*\x1b[0m pins-app \x1b[2m" + fixture.path("pins/app") + "\x1b[0m", Value: fixture.path("pins/app")},
-		{Label: "    managed-work-a \x1b[2m" + fixture.path("managed/work-a") + "\x1b[0m", Value: fixture.path("managed/work-a")},
-		{Label: "    rp-repo-a \x1b[2m~rp/repo-a\x1b[0m", Value: fixture.path("rp/repo-a")},
-		{Label: "    managed-work-b \x1b[2m" + fixture.path("managed/work-b") + "\x1b[0m", Value: fixture.path("managed/work-b")},
+		{Label: "    repo-a \x1b[2m~rp/repo-a\x1b[0m", Value: fixture.path("rp/repo-a")},
+		{Label: "    work-a \x1b[2m" + fixture.path("managed/work-a") + "\x1b[0m", Value: fixture.path("managed/work-a")},
+		{Label: "    work-b \x1b[2m" + fixture.path("managed/work-b") + "\x1b[0m", Value: fixture.path("managed/work-b")},
 		{Label: "  \x1b[1m\x1b[36mSettings\x1b[0m  \x1b[2mmanage pinned directories\x1b[0m", Value: switchSettingsSentinel},
 	}
 	if got := fakeRunner.last.Entries; !equalEntries(got, wantEntries) {
@@ -373,7 +398,12 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 		t.Fatalf("runner preview window = %q, want %q", got, want)
 	}
 	if got, want := fakeRunner.last.Bindings, []string{
-		"start:pos(4)",
+		"esc:abort",
+		"ctrl-n:abort",
+		"alt-1:abort",
+		"alt-2:abort",
+		"alt-3:abort",
+		"start:pos(5)",
 		"focus:execute-silent(exec '/tmp/projmux' 'switch' 'sidebar-focus' {2})",
 	}; !equalStrings(got, want) {
 		t.Fatalf("runner bindings = %q, want %q", got, want)
@@ -381,7 +411,7 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 	if got, want := fakeRunner.last.UI, switchUISidebar; got != want {
 		t.Fatalf("runner UI = %q, want %q", got, want)
 	}
-	if got, want := fakeRunner.last.Footer, "Enter: switch/create\nAlt-T: tag focused directory\nAlt-P: pin/unpin focused directory"; got != want {
+	if got, want := fakeRunner.last.Footer, "Enter: switch/create\nCtrl-X: kill focused session\nAlt-P: pin/unpin focused directory"; got != want {
 		t.Fatalf("runner footer = %q, want %q", got, want)
 	}
 	if got, want := fakeExecutor.ensureSessionName, "managed-work-a"; got != want {
@@ -392,6 +422,52 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 	}
 	if got, want := fakeExecutor.openSessionName, "managed-work-a"; got != want {
 		t.Fatalf("open session = %q, want %q", got, want)
+	}
+}
+
+func TestNewSwitchCommandInfersRepoRootFromHomeSourceRepos(t *testing.T) {
+	fixture := newSwitchFixture(t)
+	fixture.mkdir("home/dotfiles")
+	fixture.mkdir("home/source/repos/app/nested")
+	fixture.mkdir("home/source/repos/lib")
+
+	t.Setenv("HOME", fixture.path("home"))
+	t.Setenv("XDG_CONFIG_HOME", fixture.path("xdg-config"))
+	t.Setenv("XDG_STATE_HOME", fixture.path("xdg-state"))
+	t.Chdir(fixture.path("home/source/repos/app/nested"))
+
+	cmd := newSwitchCommand()
+	fakeRunner := &capturingSwitchRunner{result: intfzf.Result{}}
+	cmd.runner = fakeRunner
+	cmd.sessions = &capturingSwitchSessionExecutor{}
+	cmd.executable = func() (string, error) { return "/tmp/projmux", nil }
+
+	if err := cmd.Run([]string{"--ui=sidebar"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	wantCandidates := []string{
+		fixture.path("home"),
+		fixture.path("home/dotfiles"),
+		fixture.path("home/source/repos/app"),
+		fixture.path("home/source/repos/lib"),
+		fixture.path("home/source/repos"),
+		switchSettingsSentinel,
+	}
+	if got := fakeRunner.last.Candidates; !equalStrings(got, wantCandidates) {
+		t.Fatalf("runner candidates = %q, want %q", got, wantCandidates)
+	}
+
+	wantEntries := []intfzf.Entry{
+		{Label: "    home \x1b[2m~\x1b[0m", Value: fixture.path("home")},
+		{Label: "    app \x1b[2m~rp/app\x1b[0m", Value: fixture.path("home/source/repos/app")},
+		{Label: "    dotfiles \x1b[2m~/dotfiles\x1b[0m", Value: fixture.path("home/dotfiles")},
+		{Label: "    lib \x1b[2m~rp/lib\x1b[0m", Value: fixture.path("home/source/repos/lib")},
+		{Label: "    repos \x1b[2m~rp\x1b[0m", Value: fixture.path("home/source/repos")},
+		{Label: "  \x1b[1m\x1b[36mSettings\x1b[0m  \x1b[2mmanage pinned directories\x1b[0m", Value: switchSettingsSentinel},
+	}
+	if got := fakeRunner.last.Entries; !equalEntries(got, wantEntries) {
+		t.Fatalf("runner entries = %#v, want %#v", got, wantEntries)
 	}
 }
 
@@ -632,6 +708,7 @@ func TestSwitchCommandUsesDefaultManagedRootsWhenEnvUnset(t *testing.T) {
 		"/home/tester/projects",
 		"/home/tester/src",
 		"/home/tester/code",
+		"/home/tester/source/repos",
 	}; !equalStrings(got, want) {
 		t.Fatalf("inputs.ManagedRoots = %q, want %q", got, want)
 	}
@@ -658,8 +735,9 @@ func TestSwitchCommandPreviewRendersExistingSessionContext(t *testing.T) {
 		},
 		panes: []corepreview.Pane{
 			{WindowIndex: "2", Index: "0"},
-			{WindowIndex: "2", Index: "1", Active: true},
+			{ID: "%9", WindowIndex: "2", Index: "1", Active: true},
 		},
+		snapshot: "npm test\nok",
 	}
 	cmd := &switchCommand{
 		discover:     candidates.Discover,
@@ -686,18 +764,20 @@ func TestSwitchCommandPreviewRendersExistingSessionContext(t *testing.T) {
 	}
 
 	want := "" +
-		"dir: ~rp/repo-a\n" +
-		"session: repo-a\n" +
-		"state: existing\n" +
-		"git: main\n" +
-		"summary: 2w  2p  w2.p1\n" +
-		"selected: w2.p1\n" +
-		"windows:\n" +
-		"    1\n" +
-		"  * 2\n" +
-		"panes:\n" +
-		"    0\n" +
-		"  * 1\n"
+		"\x1b[1m\x1b[36mTarget\x1b[0m\n" +
+		"  \x1b[2mdir\x1b[0m  ~rp/repo-a\n" +
+		"  \x1b[2msession\x1b[0m  repo-a\n" +
+		"  \x1b[2mmode\x1b[0m  \x1b[32mexisting\x1b[0m\n" +
+		"  \x1b[2mgit\x1b[0m  main\n\n" +
+		"\x1b[1m\x1b[36mWindows\x1b[0m\n" +
+		"[1] -                   0p  -\n" +
+		"\x1b[1m\x1b[32m[2] -                   0p  -\x1b[0m\n\n" +
+		"\x1b[1m\x1b[36mPanes\x1b[0m\n" +
+		"[2.0] -                  -          -\n" +
+		"\x1b[1m\x1b[32m[2.1] -                  -          -\x1b[0m\n\n" +
+		"\x1b[1m\x1b[36mPane Snapshot\x1b[0m\n" +
+		"\x1b[2m────────────────────────────────────────────────────────────────\x1b[0m\n" +
+		"npm test\nok\n"
 	if got := stdout.String(); got != want {
 		t.Fatalf("stdout = %q, want %q", got, want)
 	}
@@ -706,6 +786,12 @@ func TestSwitchCommandPreviewRendersExistingSessionContext(t *testing.T) {
 	}
 	if got, want := inventory.sessionPanesSession, "repo-a"; got != want {
 		t.Fatalf("SessionPanes session = %q, want %q", got, want)
+	}
+	if got, want := inventory.snapshotTarget, "%9"; got != want {
+		t.Fatalf("CapturePane target = %q, want %q", got, want)
+	}
+	if got, want := inventory.snapshotStartLine, -60; got != want {
+		t.Fatalf("CapturePane start line = %d, want %d", got, want)
 	}
 }
 
@@ -740,15 +826,13 @@ func TestSwitchCommandPreviewRendersNewSessionContextWithoutInventory(t *testing
 	}
 
 	want := "" +
-		"dir: ~rp/repo-a\n" +
-		"session: repo-a\n" +
-		"state: new\n" +
-		"summary: 0w  0p\n" +
-		"selected: none\n" +
-		"windows:\n" +
-		"  (none)\n" +
-		"panes:\n" +
-		"  (none)\n"
+		"\x1b[1m\x1b[36mTarget\x1b[0m\n" +
+		"  \x1b[2mdir\x1b[0m  ~rp/repo-a\n" +
+		"  \x1b[2msession\x1b[0m  repo-a\n" +
+		"  \x1b[2mmode\x1b[0m  \x1b[33mnew session\x1b[0m\n\n" +
+		"\x1b[1m\x1b[36mAction\x1b[0m\n" +
+		"  \x1b[2menter\x1b[0m  switch/create this session\n" +
+		"  \x1b[2mresult\x1b[0m  tmux new-session -d -s <name> -c <dir>\n"
 	if got := stdout.String(); got != want {
 		t.Fatalf("stdout = %q, want %q", got, want)
 	}
@@ -964,27 +1048,100 @@ func TestSwitchCommandCyclePaneNoOpsForNewSessionCandidates(t *testing.T) {
 	}
 }
 
-func TestSwitchCommandPickerAltTLoopsUntilSelection(t *testing.T) {
+func TestSwitchCommandPickerCtrlXSwitchesToPreviousActiveSessionBeforeKill(t *testing.T) {
 	t.Parallel()
 
 	var gotRunnerOptions []intfzf.Options
-	store := &capturingSwitchTagStore{tagged: true}
-	executor := &capturingSwitchSessionExecutor{}
+	executor := &capturingSwitchSessionExecutor{
+		exists: map[string]bool{
+			"tmp-app":      true,
+			"tmp-previous": true,
+		},
+		recentSessions: []string{"tmp-app", "tmp-previous"},
+	}
 	call := 0
 
+	cmd := &switchCommand{
+		discover: func(candidates.Inputs) ([]string, error) {
+			return []string{"/tmp/app", "/tmp/previous"}, nil
+		},
+		pinStore: func() (switchPinStore, error) { return &stubSwitchPinStore{}, nil },
+		runner: switchRunnerFunc(func(options intfzf.Options) (intfzf.Result, error) {
+			gotRunnerOptions = append(gotRunnerOptions, options)
+			call++
+			if call == 1 {
+				return intfzf.Result{Key: switchKillExpectKey, Value: "/tmp/app"}, nil
+			}
+			return intfzf.Result{}, nil
+		}),
+		sessions:   executor,
+		executable: func() (string, error) { return "/tmp/projmux", nil },
+		identity: switchIdentityResolverFunc(func(path string) (string, error) {
+			switch path {
+			case "/tmp/app":
+				return "tmp-app", nil
+			case "/tmp/previous":
+				return "tmp-previous", nil
+			default:
+				return "", errors.New("unexpected path")
+			}
+		}),
+		validate:   func(string) error { return nil },
+		homeDir:    func() (string, error) { return "/home/tester", nil },
+		workingDir: func() (string, error) { return "/tmp", nil },
+	}
+
+	var stdout bytes.Buffer
+	if err := cmd.Run([]string{"--ui=sidebar"}, &stdout, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got, want := len(gotRunnerOptions), 2; got != want {
+		t.Fatalf("runner calls = %d, want %d", got, want)
+	}
+	for i, options := range gotRunnerOptions {
+		if got, want := options.ExpectKeys, []string{switchKillExpectKey, switchPinExpectKey}; !equalStrings(got, want) {
+			t.Fatalf("runner expect keys call %d = %q, want %q", i, got, want)
+		}
+		if got, want := options.UI, switchUISidebar; got != want {
+			t.Fatalf("runner UI call %d = %q, want %q", i, got, want)
+		}
+	}
+	if !containsString(gotRunnerOptions[1].Bindings, "start:pos(2)") {
+		t.Fatalf("second runner bindings = %q, want fallback focus start:pos(2)", gotRunnerOptions[1].Bindings)
+	}
+	if got, want := executor.killSessionName, "tmp-app"; got != want {
+		t.Fatalf("kill session = %q, want %q", got, want)
+	}
+	if got, want := executor.openSessionName, "tmp-previous"; got != want {
+		t.Fatalf("fallback open session = %q, want %q", got, want)
+	}
+	if got := executor.ensureSessionName; got != "" {
+		t.Fatalf("ensure session called unexpectedly: %q", got)
+	}
+	if got := stdout.String(); got != "" {
+		t.Fatalf("stdout = %q, want empty for ctrl-x loop", got)
+	}
+}
+
+func TestSwitchCommandPickerCtrlXBlocksKillWithoutPreviousLiveSession(t *testing.T) {
+	t.Parallel()
+
+	executor := &capturingSwitchSessionExecutor{
+		exists:         map[string]bool{"tmp-app": true},
+		recentSessions: []string{"tmp-app"},
+	}
+	call := 0
 	cmd := &switchCommand{
 		discover: func(candidates.Inputs) ([]string, error) {
 			return []string{"/tmp/app"}, nil
 		},
 		pinStore: func() (switchPinStore, error) { return &stubSwitchPinStore{}, nil },
-		tagStore: func() (switchTagStore, error) { return store, nil },
-		runner: switchRunnerFunc(func(options intfzf.Options) (intfzf.Result, error) {
-			gotRunnerOptions = append(gotRunnerOptions, options)
+		runner: switchRunnerFunc(func(intfzf.Options) (intfzf.Result, error) {
 			call++
 			if call == 1 {
-				return intfzf.Result{Key: switchTagExpectKey, Value: "/tmp/app"}, nil
+				return intfzf.Result{Key: switchKillExpectKey, Value: "/tmp/app"}, nil
 			}
-			return intfzf.Result{Value: "/tmp/app"}, nil
+			return intfzf.Result{}, nil
 		}),
 		sessions:   executor,
 		identity:   stubSwitchIdentityResolver{name: "tmp-app"},
@@ -993,32 +1150,46 @@ func TestSwitchCommandPickerAltTLoopsUntilSelection(t *testing.T) {
 		workingDir: func() (string, error) { return "/tmp", nil },
 	}
 
-	var stdout bytes.Buffer
-	if err := cmd.Run(nil, &stdout, &bytes.Buffer{}); err != nil {
+	if err := cmd.Run(nil, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if got, want := len(gotRunnerOptions), 2; got != want {
-		t.Fatalf("runner calls = %d, want %d", got, want)
+	if got := executor.killSessionName; got != "" {
+		t.Fatalf("kill session called unexpectedly: %q", got)
 	}
-	for i, options := range gotRunnerOptions {
-		if got, want := options.ExpectKeys, []string{switchTagExpectKey, switchPinExpectKey}; !equalStrings(got, want) {
-			t.Fatalf("runner expect keys call %d = %q, want %q", i, got, want)
-		}
-		if got, want := options.UI, switchUIPopup; got != want {
-			t.Fatalf("runner UI call %d = %q, want %q", i, got, want)
-		}
+	if got := executor.openSessionName; got != "" {
+		t.Fatalf("open session called unexpectedly: %q", got)
 	}
-	if got, want := store.calls, []string{"/tmp/app"}; !equalStrings(got, want) {
-		t.Fatalf("Toggle() calls = %q, want %q", got, want)
+}
+
+func TestSwitchCommandPickerCtrlXDoesNotKillHome(t *testing.T) {
+	t.Parallel()
+
+	executor := &capturingSwitchSessionExecutor{exists: map[string]bool{"home": true}}
+	call := 0
+	cmd := &switchCommand{
+		discover: func(candidates.Inputs) ([]string, error) {
+			return []string{"/home/tester"}, nil
+		},
+		pinStore: func() (switchPinStore, error) { return &stubSwitchPinStore{}, nil },
+		runner: switchRunnerFunc(func(intfzf.Options) (intfzf.Result, error) {
+			call++
+			if call == 1 {
+				return intfzf.Result{Key: switchKillExpectKey, Value: "/home/tester"}, nil
+			}
+			return intfzf.Result{}, nil
+		}),
+		sessions:   executor,
+		identity:   stubSwitchIdentityResolver{name: "home"},
+		validate:   func(string) error { return nil },
+		homeDir:    func() (string, error) { return "/home/tester", nil },
+		workingDir: func() (string, error) { return "/home/tester", nil },
 	}
-	if got, want := executor.ensureSessionName, "tmp-app"; got != want {
-		t.Fatalf("ensure session = %q, want %q", got, want)
+
+	if err := cmd.Run(nil, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
 	}
-	if got, want := executor.openSessionName, "tmp-app"; got != want {
-		t.Fatalf("open session = %q, want %q", got, want)
-	}
-	if got := stdout.String(); got != "" {
-		t.Fatalf("stdout = %q, want empty for alt-t loop", got)
+	if got := executor.killSessionName; got != "" {
+		t.Fatalf("kill session called unexpectedly: %q", got)
 	}
 }
 
@@ -1058,7 +1229,7 @@ func TestSwitchCommandPickerAltPLoopsUntilSelection(t *testing.T) {
 		t.Fatalf("runner calls = %d, want %d", got, want)
 	}
 	for i, options := range gotRunnerOptions {
-		if got, want := options.ExpectKeys, []string{switchTagExpectKey, switchPinExpectKey}; !equalStrings(got, want) {
+		if got, want := options.ExpectKeys, []string{switchKillExpectKey, switchPinExpectKey}; !equalStrings(got, want) {
 			t.Fatalf("runner expect keys call %d = %q, want %q", i, got, want)
 		}
 	}
@@ -1380,10 +1551,14 @@ type capturingSwitchSessionExecutor struct {
 	ensureSessionName string
 	ensureCWD         string
 	openSessionName   string
+	killSessionName   string
 	exists            map[string]bool
+	recentSessions    []string
 	ensureErr         error
 	openErr           error
+	killErr           error
 	existsErr         error
+	recentErr         error
 }
 
 func (e *capturingSwitchSessionExecutor) EnsureSession(_ context.Context, sessionName, cwd string) error {
@@ -1397,6 +1572,11 @@ func (e *capturingSwitchSessionExecutor) OpenSession(_ context.Context, sessionN
 	return e.openErr
 }
 
+func (e *capturingSwitchSessionExecutor) KillSession(_ context.Context, sessionName string) error {
+	e.killSessionName = sessionName
+	return e.killErr
+}
+
 func (e *capturingSwitchSessionExecutor) SessionExists(_ context.Context, sessionName string) (bool, error) {
 	if e.existsErr != nil {
 		return false, e.existsErr
@@ -1405,6 +1585,13 @@ func (e *capturingSwitchSessionExecutor) SessionExists(_ context.Context, sessio
 		return false, nil
 	}
 	return e.exists[sessionName], nil
+}
+
+func (e *capturingSwitchSessionExecutor) RecentSessions(context.Context) ([]string, error) {
+	if e.recentErr != nil {
+		return nil, e.recentErr
+	}
+	return e.recentSessions, nil
 }
 
 type stubSwitchPinStore struct {

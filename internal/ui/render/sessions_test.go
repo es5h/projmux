@@ -10,8 +10,8 @@ func TestBuildSessionRowsSanitizesNames(t *testing.T) {
 		{Name: "bad\tname\nx", Attached: false, WindowCount: 1, PaneCount: 1, StoredTarget: "w1", Path: "/tmp/bad\tpath\nx"},
 	})
 	want := []SessionRow{
-		{Label: "repo-a  [attached]  2w  3p  w3.p1  /tmp/repo-a", Value: "repo-a"},
-		{Label: "bad name x  [detached]  1w  1p  w1  /tmp/bad path x", Value: "bad name x"},
+		{Label: "[ ]  \x1b[32m[Attached]\x1b[0m  \x1b[34m2 Windows\x1b[0m  repo-a", Value: "repo-a"},
+		{Label: "[ ]  \x1b[33m[Detached]\x1b[0m  bad name x", Value: "bad name x"},
 	}
 
 	if len(rows) != len(want) {

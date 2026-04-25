@@ -22,18 +22,26 @@ func TestRenderPopupPreviewWithSelectedWindowAndPane(t *testing.T) {
 			{WindowIndex: "2", Index: "3", Title: "server", Command: "go", Path: "~rp/app"},
 			{WindowIndex: "2", Index: "4", Title: "tests", Command: "gotest", Path: "~rp/app"},
 		},
+		PaneSnapshot: "go test ./...\nok",
 	})
 
 	want := "" +
-		"session: app\n" +
-		"summary: 2w  2p  w2.p4\n" +
-		"selected: w2.p4\n" +
-		"windows:\n" +
-		"    1 | shell | 1 panes | ~/\n" +
-		"  * 2 | app | 2 panes | ~rp/app\n" +
-		"panes:\n" +
-		"    3 | server | go | ~rp/app\n" +
-		"  * 4 | tests | gotest | ~rp/app\n"
+		"\x1b[1m\x1b[36mSession\x1b[0m\n" +
+		"  \x1b[2mname\x1b[0m  app\n" +
+		"  \x1b[2mwindows\x1b[0m  2\n" +
+		"  \x1b[2mpane\x1b[0m  4 (window 2)\n" +
+		"  \x1b[2mcmd\x1b[0m  gotest\n" +
+		"  \x1b[2mtitle\x1b[0m  tests\n" +
+		"  \x1b[2mpath\x1b[0m  ~rp/app\n\n" +
+		"\x1b[1m\x1b[36mWindows\x1b[0m\n" +
+		"[1] shell               1p  ~/\n" +
+		"\x1b[1m\x1b[32m[2] app                 2p  ~rp/app\x1b[0m\n\n" +
+		"\x1b[1m\x1b[36mPanes\x1b[0m\n" +
+		"[2.3] server             go         ~rp/app\n" +
+		"\x1b[1m\x1b[32m[2.4] tests              gotest     ~rp/app\x1b[0m\n\n" +
+		"\x1b[1m\x1b[36mPane Snapshot\x1b[0m\n" +
+		"\x1b[2m────────────────────────────────────────────────────────────────\x1b[0m\n" +
+		"go test ./...\nok\n"
 	if got != want {
 		t.Fatalf("RenderPopupPreview() = %q, want %q", got, want)
 	}
@@ -52,13 +60,14 @@ func TestRenderPopupPreviewWithWindowOnlySelection(t *testing.T) {
 	})
 
 	want := "" +
-		"session: app\n" +
-		"summary: 1w  0p  w5\n" +
-		"selected: w5\n" +
-		"windows:\n" +
-		"  * 5 | build | 1 panes | ~rp/build\n" +
-		"panes:\n" +
-		"  (none)\n"
+		"\x1b[1m\x1b[36mSession\x1b[0m\n" +
+		"  \x1b[2mname\x1b[0m  app\n" +
+		"  \x1b[2mwindows\x1b[0m  1\n" +
+		"  \x1b[2mpane\x1b[0m  ? (window 5)\n\n" +
+		"\x1b[1m\x1b[36mWindows\x1b[0m\n" +
+		"\x1b[1m\x1b[32m[5] build               1p  ~rp/build\x1b[0m\n\n" +
+		"\x1b[1m\x1b[36mPanes\x1b[0m\n" +
+		"(none)\n"
 	if got != want {
 		t.Fatalf("RenderPopupPreview() = %q, want %q", got, want)
 	}
@@ -78,13 +87,14 @@ func TestRenderPopupPreviewWithoutSelectionSanitizesOutput(t *testing.T) {
 	})
 
 	want := "" +
-		"session: app one preview\n" +
-		"summary: 1w  1p\n" +
-		"selected: none\n" +
-		"windows:\n" +
-		"    1 2 | main pane | 2 panes | /tmp/app one\n" +
-		"panes:\n" +
-		"    3 4 | srv one | go test | /tmp/app one\n"
+		"\x1b[1m\x1b[36mSession\x1b[0m\n" +
+		"  \x1b[2mname\x1b[0m  app one preview\n" +
+		"  \x1b[2mwindows\x1b[0m  1\n" +
+		"  \x1b[2mpane\x1b[0m  ? (window ?)\n\n" +
+		"\x1b[1m\x1b[36mWindows\x1b[0m\n" +
+		"[1 2] main pane           2p  /tmp/app one\n\n" +
+		"\x1b[1m\x1b[36mPanes\x1b[0m\n" +
+		"[1 2.3 4] srv one            go test    /tmp/app one\n"
 	if got != want {
 		t.Fatalf("RenderPopupPreview() = %q, want %q", got, want)
 	}

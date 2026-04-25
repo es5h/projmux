@@ -375,13 +375,13 @@ func TestClientRecentSessionSummariesIncludeAttachedPaneCountAndPath(t *testing.
 			}
 			return []byte("10\tstale\t0\t1\n35\tfresh\t1\t3\n"), nil
 		case 2:
-			if got, want := args, []string{"list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{pane_index}\t#{?pane_active,1,0}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}"}; !reflect.DeepEqual(got, want) {
+			if got, want := args, []string{"list-panes", "-a", "-F", "#{session_name}\t#{pane_id}\t#{window_index}\t#{pane_index}\t#{?pane_active,1,0}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}"}; !reflect.DeepEqual(got, want) {
 				t.Fatalf("list-panes args = %#v, want %#v", got, want)
 			}
 			return []byte(
-				"fresh\t0\t0\t0\tshell\tzsh\t/tmp/fresh-first\n" +
-					"fresh\t0\t1\t1\teditor\tnvim\t/tmp/fresh-active\n" +
-					"stale\t0\t0\t0\tshell\tzsh\t/tmp/stale\n",
+				"fresh\t%1\t0\t0\t0\tshell\tzsh\t/tmp/fresh-first\n" +
+					"fresh\t%2\t0\t1\t1\teditor\tnvim\t/tmp/fresh-active\n" +
+					"stale\t%3\t0\t0\t0\tshell\tzsh\t/tmp/stale\n",
 			), nil
 		default:
 			t.Fatalf("unexpected call %d", call)
@@ -511,7 +511,7 @@ func TestClientListAllPanesParsesRows(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("dotfiles\t0\t1\t1\tserver\tgo\t/home/tester/source/repos/dotfiles\nhome\t2\t0\t0\tshell\tzsh\t/home/tester\n"), nil
+		return []byte("dotfiles\t%1\t0\t1\t1\tserver\tgo\t/home/tester/source/repos/dotfiles\nhome\t%2\t2\t0\t0\tshell\tzsh\t/home/tester\n"), nil
 	}))
 
 	panes, err := client.ListAllPanes(context.Background())
@@ -520,8 +520,8 @@ func TestClientListAllPanesParsesRows(t *testing.T) {
 	}
 
 	want := []Pane{
-		{SessionName: "dotfiles", WindowIndex: 0, PaneIndex: 1, Title: "server", Command: "go", Path: "/home/tester/source/repos/dotfiles", Active: true},
-		{SessionName: "home", WindowIndex: 2, PaneIndex: 0, Title: "shell", Command: "zsh", Path: "/home/tester", Active: false},
+		{ID: "%1", SessionName: "dotfiles", WindowIndex: 0, PaneIndex: 1, Title: "server", Command: "go", Path: "/home/tester/source/repos/dotfiles", Active: true},
+		{ID: "%2", SessionName: "home", WindowIndex: 2, PaneIndex: 0, Title: "shell", Command: "zsh", Path: "/home/tester", Active: false},
 	}
 	if !reflect.DeepEqual(panes, want) {
 		t.Fatalf("ListAllPanes = %#v, want %#v", panes, want)
@@ -532,7 +532,7 @@ func TestClientListAllPanesRejectsEmptySessionNames(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte(" \t0\t1\t1\tshell\tzsh\t/home/tester"), nil
+		return []byte(" \t%1\t0\t1\t1\tshell\tzsh\t/home/tester"), nil
 	}))
 
 	_, err := client.ListAllPanes(context.Background())
@@ -548,7 +548,7 @@ func TestClientListAllPanesRejectsInvalidPaneIndex(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("dotfiles\t0\toops\t1\tserver\tgo\t/repo"), nil
+		return []byte("dotfiles\t%1\t0\toops\t1\tserver\tgo\t/repo"), nil
 	}))
 
 	_, err := client.ListAllPanes(context.Background())
@@ -564,7 +564,7 @@ func TestClientListAllPanesRejectsInvalidActiveFlag(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("dotfiles\t0\t1\tmaybe\tserver\tgo\t/repo"), nil
+		return []byte("dotfiles\t%1\t0\t1\tmaybe\tserver\tgo\t/repo"), nil
 	}))
 
 	_, err := client.ListAllPanes(context.Background())
@@ -573,6 +573,25 @@ func TestClientListAllPanesRejectsInvalidActiveFlag(t *testing.T) {
 	}
 	if !errors.Is(err, errActiveFlagInvalid) {
 		t.Fatalf("ListAllPanes error = %v, want %v", err, errActiveFlagInvalid)
+	}
+}
+
+func TestClientCapturePaneUsesPaneTargetAndStartLine(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient(staticRunner(func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		if got, want := args, []string{"capture-pane", "-p", "-t", "%8", "-S", "-80"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("capture-pane args = %#v, want %#v", got, want)
+		}
+		return []byte("line one\nline two\n"), nil
+	}))
+
+	got, err := client.CapturePane(context.Background(), "%8", -80)
+	if err != nil {
+		t.Fatalf("CapturePane() error = %v", err)
+	}
+	if want := "line one\nline two"; got != want {
+		t.Fatalf("CapturePane() = %q, want %q", got, want)
 	}
 }
 

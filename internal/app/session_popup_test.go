@@ -29,8 +29,9 @@ func TestAppRunSessionPopupPreview(t *testing.T) {
 		panes: []corepreview.Pane{
 			{WindowIndex: "2", Index: "4", Title: "shell", Command: "zsh", Path: "~/", Active: true},
 			{WindowIndex: "3", Index: "7", Title: "server", Command: "go", Path: "~rp/dev"},
-			{WindowIndex: "3", Index: "8", Title: "tests", Command: "gotest", Path: "~rp/dev"},
+			{ID: "%8", WindowIndex: "3", Index: "8", Title: "tests", Command: "gotest", Path: "~rp/dev"},
 		},
+		snapshot: "go test ./...\nok",
 	}
 
 	app := &App{
@@ -54,17 +55,30 @@ func TestAppRunSessionPopupPreview(t *testing.T) {
 	if got, want := inventory.sessionPanesSession, "dev"; got != want {
 		t.Fatalf("SessionPanes session = %q, want %q", got, want)
 	}
+	if got, want := inventory.snapshotTarget, "%8"; got != want {
+		t.Fatalf("CapturePane target = %q, want %q", got, want)
+	}
+	if got, want := inventory.snapshotStartLine, -80; got != want {
+		t.Fatalf("CapturePane start line = %d, want %d", got, want)
+	}
 
 	const wantOutput = "" +
-		"session: dev\n" +
-		"summary: 2w  3p  w3.p8\n" +
-		"selected: w3.p8\n" +
-		"windows:\n" +
-		"    2 | shell | 1 panes | ~/\n" +
-		"  * 3 | dev | 2 panes | ~rp/dev\n" +
-		"panes:\n" +
-		"    7 | server | go | ~rp/dev\n" +
-		"  * 8 | tests | gotest | ~rp/dev\n"
+		"\x1b[1m\x1b[36mSession\x1b[0m\n" +
+		"  \x1b[2mname\x1b[0m  dev\n" +
+		"  \x1b[2mwindows\x1b[0m  2\n" +
+		"  \x1b[2mpane\x1b[0m  8 (window 3)\n" +
+		"  \x1b[2mcmd\x1b[0m  gotest\n" +
+		"  \x1b[2mtitle\x1b[0m  tests\n" +
+		"  \x1b[2mpath\x1b[0m  ~rp/dev\n\n" +
+		"\x1b[1m\x1b[36mWindows\x1b[0m\n" +
+		"[2] shell               1p  ~/\n" +
+		"\x1b[1m\x1b[32m[3] dev                 2p  ~rp/dev\x1b[0m\n\n" +
+		"\x1b[1m\x1b[36mPanes\x1b[0m\n" +
+		"[3.7] server             go         ~rp/dev\n" +
+		"\x1b[1m\x1b[32m[3.8] tests              gotest     ~rp/dev\x1b[0m\n\n" +
+		"\x1b[1m\x1b[36mPane Snapshot\x1b[0m\n" +
+		"\x1b[2m────────────────────────────────────────────────────────────────\x1b[0m\n" +
+		"go test ./...\nok\n"
 	if got := stdout.String(); got != wantOutput {
 		t.Fatalf("stdout = %q, want %q", got, wantOutput)
 	}
@@ -123,15 +137,19 @@ func TestAppRunSessionPopupCyclePane(t *testing.T) {
 		t.Fatalf("cycle pane panes = %#v, want %#v", got, want)
 	}
 	const wantOutput = "" +
-		"session: dev\n" +
-		"summary: 2w  3p  w3.p8\n" +
-		"selected: w3.p8\n" +
-		"windows:\n" +
-		"    2 | shell | 1 panes | ~/\n" +
-		"  * 3 | dev | 2 panes | ~rp/dev\n" +
-		"panes:\n" +
-		"    7 | server | go | ~rp/dev\n" +
-		"  * 8 | tests | gotest | ~rp/dev\n"
+		"\x1b[1m\x1b[36mSession\x1b[0m\n" +
+		"  \x1b[2mname\x1b[0m  dev\n" +
+		"  \x1b[2mwindows\x1b[0m  2\n" +
+		"  \x1b[2mpane\x1b[0m  8 (window 3)\n" +
+		"  \x1b[2mcmd\x1b[0m  gotest\n" +
+		"  \x1b[2mtitle\x1b[0m  tests\n" +
+		"  \x1b[2mpath\x1b[0m  ~rp/dev\n\n" +
+		"\x1b[1m\x1b[36mWindows\x1b[0m\n" +
+		"[2] shell               1p  ~/\n" +
+		"\x1b[1m\x1b[32m[3] dev                 2p  ~rp/dev\x1b[0m\n\n" +
+		"\x1b[1m\x1b[36mPanes\x1b[0m\n" +
+		"[3.7] server             go         ~rp/dev\n" +
+		"\x1b[1m\x1b[32m[3.8] tests              gotest     ~rp/dev\x1b[0m\n"
 	if got := stdout.String(); got != wantOutput {
 		t.Fatalf("stdout = %q, want %q", got, wantOutput)
 	}
@@ -190,14 +208,18 @@ func TestAppRunSessionPopupCycleWindow(t *testing.T) {
 		t.Fatalf("cycle window panes = %#v, want %#v", got, want)
 	}
 	const wantOutput = "" +
-		"session: dev\n" +
-		"summary: 2w  2p  w4.p0\n" +
-		"selected: w4.p0\n" +
-		"windows:\n" +
-		"    3 | dev | 1 panes | ~rp/dev\n" +
-		"  * 4 | logs | 1 panes | ~rp/dev\n" +
-		"panes:\n" +
-		"  * 0 | tail | tail | ~rp/dev\n"
+		"\x1b[1m\x1b[36mSession\x1b[0m\n" +
+		"  \x1b[2mname\x1b[0m  dev\n" +
+		"  \x1b[2mwindows\x1b[0m  2\n" +
+		"  \x1b[2mpane\x1b[0m  0 (window 4)\n" +
+		"  \x1b[2mcmd\x1b[0m  tail\n" +
+		"  \x1b[2mtitle\x1b[0m  tail\n" +
+		"  \x1b[2mpath\x1b[0m  ~rp/dev\n\n" +
+		"\x1b[1m\x1b[36mWindows\x1b[0m\n" +
+		"[3] dev                 1p  ~rp/dev\n" +
+		"\x1b[1m\x1b[32m[4] logs                1p  ~rp/dev\x1b[0m\n\n" +
+		"\x1b[1m\x1b[36mPanes\x1b[0m\n" +
+		"\x1b[1m\x1b[32m[4.0] tail               tail       ~rp/dev\x1b[0m\n"
 	if got := stdout.String(); got != wantOutput {
 		t.Fatalf("stdout = %q, want %q", got, wantOutput)
 	}
@@ -259,13 +281,14 @@ func TestSessionPopupPreviewReportsNoSelectionModel(t *testing.T) {
 	}
 
 	const wantOutput = "" +
-		"session: dev\n" +
-		"summary: 0w  1p\n" +
-		"selected: none\n" +
-		"windows:\n" +
-		"  (none)\n" +
-		"panes:\n" +
-		"  (none)\n"
+		"\x1b[1m\x1b[36mSession\x1b[0m\n" +
+		"  \x1b[2mname\x1b[0m  dev\n" +
+		"  \x1b[2mwindows\x1b[0m  0\n" +
+		"  \x1b[2mpane\x1b[0m  ? (window ?)\n\n" +
+		"\x1b[1m\x1b[36mWindows\x1b[0m\n" +
+		"(none)\n\n" +
+		"\x1b[1m\x1b[36mPanes\x1b[0m\n" +
+		"(none)\n"
 	if got := stdout.String(); got != wantOutput {
 		t.Fatalf("stdout = %q, want %q", got, wantOutput)
 	}

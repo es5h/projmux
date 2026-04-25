@@ -56,18 +56,23 @@ func TestAppRunSessionsDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 		t.Fatalf("runner footer = %q, want %q", got, want)
 	}
 	if got, want := gotOptions.Entries, []intfzf.Entry{
-		{Label: "repo-b  [attached]  3w  4p  w3.p1  /tmp/repo-b", Value: "repo-b"},
-		{Label: "home  [detached]  1w  1p  /home/tester", Value: "home"},
+		{Label: "[ ]  \x1b[32m[Attached]\x1b[0m  \x1b[34m3 Windows\x1b[0m  repo-b", Value: "repo-b"},
+		{Label: "[ ]  \x1b[33m[Detached]\x1b[0m  home", Value: "home"},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
 	}
 	if got, want := gotOptions.PreviewCommand, "exec '/tmp/proj mux/bin/projmux' 'session-popup' 'preview' {2}"; got != want {
 		t.Fatalf("runner preview command = %q, want %q", got, want)
 	}
-	if got, want := gotOptions.PreviewWindow, "down,45%,border-top"; got != want {
+	if got, want := gotOptions.PreviewWindow, "right,60%,border-left"; got != want {
 		t.Fatalf("runner preview window = %q, want %q", got, want)
 	}
 	if got, want := gotOptions.Bindings, []string{
+		"esc:abort",
+		"ctrl-n:abort",
+		"alt-1:abort",
+		"alt-2:abort",
+		"alt-3:abort",
 		"left:execute-silent(exec '/tmp/proj mux/bin/projmux' 'session-popup' 'cycle-window' {2} 'prev')+refresh-preview",
 		"right:execute-silent(exec '/tmp/proj mux/bin/projmux' 'session-popup' 'cycle-window' {2} 'next')+refresh-preview",
 		"alt-up:execute-silent(exec '/tmp/proj mux/bin/projmux' 'session-popup' 'cycle-pane' {2} 'prev')+refresh-preview",

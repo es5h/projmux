@@ -25,6 +25,10 @@ type previewInventory interface {
 	SessionPanes(ctx context.Context, sessionName string) ([]corepreview.Pane, error)
 }
 
+type previewPaneCapturer interface {
+	CapturePane(ctx context.Context, paneTarget string, startLine int) (string, error)
+}
+
 type tmuxPreviewInventoryClient interface {
 	ListSessionWindows(ctx context.Context, sessionName string) ([]inttmux.Window, error)
 	ListAllPanes(ctx context.Context) ([]inttmux.Pane, error)
@@ -215,6 +219,7 @@ func (i tmuxPreviewInventory) SessionPanes(ctx context.Context, sessionName stri
 			continue
 		}
 		panes = append(panes, corepreview.Pane{
+			ID:          row.ID,
 			WindowIndex: strconv.Itoa(row.WindowIndex),
 			Index:       strconv.Itoa(row.PaneIndex),
 			Title:       row.Title,
@@ -224,6 +229,14 @@ func (i tmuxPreviewInventory) SessionPanes(ctx context.Context, sessionName stri
 		})
 	}
 	return panes, nil
+}
+
+func (i tmuxPreviewInventory) CapturePane(ctx context.Context, paneTarget string, startLine int) (string, error) {
+	capturer, ok := i.client.(previewPaneCapturer)
+	if !ok {
+		return "", nil
+	}
+	return capturer.CapturePane(ctx, paneTarget, startLine)
 }
 
 func parsePreviewCycleArgs(command string, args []string, stderr io.Writer) (string, corepreview.Direction, error) {

@@ -3,6 +3,7 @@ package render
 import (
 	"strconv"
 	"strings"
+	"time"
 )
 
 type SessionRow struct {
@@ -17,29 +18,34 @@ type SessionSummary struct {
 	PaneCount    int
 	Path         string
 	StoredTarget string
+	Activity     int64
 }
 
 func BuildSessionRows(summaries []SessionSummary) []SessionRow {
 	rows := make([]SessionRow, 0, len(summaries))
 	for _, summary := range summaries {
-		label := sanitizeCell(summary.Name)
-		status := "detached"
+		parts := make([]string, 0, 5)
+		parts = append(parts, formatTagSlot(false))
+
+		status := ansiYellow + "[Detached]" + ansiReset
 		if summary.Attached {
-			status = "attached"
+			status = ansiGreen + "[Attached]" + ansiReset
 		}
-		label += "  [" + status + "]"
-		if summary.WindowCount > 0 {
-			label += "  " + sanitizeCell(strconv.Itoa(summary.WindowCount)) + "w"
+		parts = append(parts, status)
+
+		if summary.WindowCount >= 2 {
+			parts = append(parts, ansiBlue+sanitizeCell(strconv.Itoa(summary.WindowCount))+" Windows"+ansiReset)
 		}
-		if summary.PaneCount > 0 {
-			label += "  " + sanitizeCell(strconv.Itoa(summary.PaneCount)) + "p"
+
+		if name := sanitizeCell(summary.Name); name != "" {
+			parts = append(parts, name)
 		}
-		if target := sanitizeCell(strings.TrimSpace(summary.StoredTarget)); target != "" {
-			label += "  " + target
+
+		if activity := formatSessionActivity(summary.Activity); activity != "" {
+			parts = append(parts, activity)
 		}
-		if path := sanitizeCell(strings.TrimSpace(summary.Path)); path != "" {
-			label += "  " + path
-		}
+
+		label := strings.Join(parts, "  ")
 
 		rows = append(rows, SessionRow{
 			Label: label,
@@ -47,4 +53,11 @@ func BuildSessionRows(summaries []SessionSummary) []SessionRow {
 		})
 	}
 	return rows
+}
+
+func formatSessionActivity(activity int64) string {
+	if activity <= 0 {
+		return ""
+	}
+	return time.Unix(activity, 0).Format("2006-01-02 15:04")
 }

@@ -34,6 +34,7 @@ type Window struct {
 
 // Pane models a previewable tmux pane with its parent window and active hint.
 type Pane struct {
+	ID          string
 	WindowIndex string
 	Index       string
 	Title       string
@@ -196,6 +197,7 @@ func normalizedPanes(panes []Pane) []Pane {
 			continue
 		}
 		normalized = append(normalized, Pane{
+			ID:          strings.TrimSpace(pane.ID),
 			WindowIndex: windowIndex,
 			Index:       index,
 			Title:       strings.TrimSpace(pane.Title),

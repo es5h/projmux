@@ -16,7 +16,7 @@ func TestBuildSwitchRowsFormatsSessionModeAndPath(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("row count = %d, want 1", len(rows))
 	}
-	if got, want := rows[0].Label, "dotfiles  [existing]  ~/dotfiles"; got != want {
+	if got, want := rows[0].Label, "[ ]     \x1b[32m[Existing]\x1b[0m  dotfiles  ~/dotfiles"; got != want {
 		t.Fatalf("label = %q, want %q", got, want)
 	}
 	if got, want := rows[0].Value, "/home/tester/dotfiles"; got != want {
@@ -33,7 +33,7 @@ func TestBuildSwitchRowsOmitsBlankMode(t *testing.T) {
 		UI:          "popup",
 	}})
 
-	if got, want := rows[0].Label, "tmp-app  /tmp/app"; got != want {
+	if got, want := rows[0].Label, "[ ]     tmp-app  /tmp/app"; got != want {
 		t.Fatalf("label = %q, want %q", got, want)
 	}
 }
@@ -64,7 +64,7 @@ func TestBuildSwitchRowsSanitizesTabsAndNewlines(t *testing.T) {
 		UI:          "popup",
 	}})
 
-	if got, want := rows[0].Label, "tmp app  [new state]  /tmp/app one"; got != want {
+	if got, want := rows[0].Label, "[ ]     [new state]  tmp app  /tmp/app one"; got != want {
 		t.Fatalf("label = %q, want %q", got, want)
 	}
 }

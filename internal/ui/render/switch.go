@@ -10,6 +10,7 @@ const (
 	ansiBold   = "\x1b[1m"
 	ansiDim    = "\x1b[2m"
 	ansiRed    = "\x1b[31m"
+	ansiBlue   = "\x1b[34m"
 	ansiGreen  = "\x1b[32m"
 	ansiYellow = "\x1b[33m"
 	ansiCyan   = "\x1b[36m"
@@ -23,6 +24,7 @@ type SwitchRow struct {
 type SwitchCandidate struct {
 	Path        string
 	DisplayPath string
+	DisplayName string
 	SessionName string
 	ModeLabel   string
 	UI          string
@@ -80,16 +82,25 @@ func formatSwitchLabel(candidate SwitchCandidate) string {
 		return formatSidebarSwitchLabel(candidate)
 	}
 
-	parts := make([]string, 0, 3)
+	return formatPopupSwitchLabel(candidate)
+}
 
-	sessionName := sanitizeCell(candidate.SessionName)
-	if sessionName != "" {
-		parts = append(parts, sessionName)
+func formatPopupSwitchLabel(candidate SwitchCandidate) string {
+	parts := make([]string, 0, 5)
+	parts = append(parts, formatTagSlot(candidate.Tagged))
+	parts = append(parts, formatPinBadge(candidate.Pinned))
+
+	modeLabel := formatPopupModeLabel(candidate.ModeLabel)
+	if modeLabel != "" {
+		parts = append(parts, modeLabel)
 	}
 
-	modeLabel := sanitizeCell(candidate.ModeLabel)
-	if modeLabel != "" {
-		parts = append(parts, "["+modeLabel+"]")
+	displayName := sanitizeCell(candidate.DisplayName)
+	if displayName == "" {
+		displayName = sanitizeCell(candidate.SessionName)
+	}
+	if displayName != "" {
+		parts = append(parts, displayName)
 	}
 
 	path := sanitizeCell(candidate.DisplayPath)
@@ -109,10 +120,25 @@ func formatSettingsLabel(candidate SwitchCandidate) string {
 		label = "Settings"
 	}
 	if candidate.UI != "sidebar" {
-		return label
+		return formatTagSlot(false) + "   " + ansiBold + ansiCyan + "[Settings]" + ansiReset + "        " + ansiDim + "manage pinned directories" + ansiReset
 	}
 	description := "manage pinned directories"
 	return "  " + ansiBold + ansiCyan + label + ansiReset + "  " + ansiDim + description + ansiReset
+}
+
+func formatPopupModeLabel(mode string) string {
+	mode = sanitizeCell(mode)
+	switch mode {
+	case "existing":
+		return ansiGreen + "[Existing]" + ansiReset
+	case "new":
+		return ansiYellow + "[New]" + ansiReset
+	default:
+		if mode == "" {
+			return ""
+		}
+		return "[" + mode + "]"
+	}
 }
 
 func formatSidebarSwitchLabel(candidate SwitchCandidate) string {
@@ -120,9 +146,12 @@ func formatSidebarSwitchLabel(candidate SwitchCandidate) string {
 	parts = append(parts, formatTagBadge(candidate.Tagged))
 	parts = append(parts, formatPinBadge(candidate.Pinned))
 
-	sessionName := sanitizeCell(candidate.SessionName)
-	if sessionName != "" {
-		parts = append(parts, formatSidebarSessionName(sessionName, candidate.ModeLabel))
+	displayName := sanitizeCell(candidate.DisplayName)
+	if displayName == "" {
+		displayName = sanitizeCell(candidate.SessionName)
+	}
+	if displayName != "" {
+		parts = append(parts, formatSidebarSessionName(displayName, candidate.ModeLabel))
 	}
 
 	path := sanitizeCell(candidate.DisplayPath)
@@ -153,6 +182,13 @@ func formatTagBadge(tagged bool) string {
 		return ansiRed + "x" + ansiReset
 	}
 	return " "
+}
+
+func formatTagSlot(tagged bool) string {
+	if tagged {
+		return "[" + ansiRed + "x" + ansiReset + "]"
+	}
+	return "[ ]"
 }
 
 func formatPinBadge(pinned bool) string {

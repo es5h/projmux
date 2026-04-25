@@ -127,12 +127,12 @@ func (c *sessionsCommand) Run(args []string, stdout, stderr io.Writer) error {
 		Footer:         sessionsPickerFooter(),
 		PreviewCommand: previewCommand,
 		PreviewWindow:  sessionsPreviewWindow(*ui),
-		Bindings: []string{
-			"left:execute-silent(" + cycleWindowPrev + ")+refresh-preview",
-			"right:execute-silent(" + cycleWindowNext + ")+refresh-preview",
-			"alt-up:execute-silent(" + cyclePanePrev + ")+refresh-preview",
-			"alt-down:execute-silent(" + cyclePaneNext + ")+refresh-preview",
-		},
+		Bindings: append(pickerCloseBindings(),
+			"left:execute-silent("+cycleWindowPrev+")+refresh-preview",
+			"right:execute-silent("+cycleWindowNext+")+refresh-preview",
+			"alt-up:execute-silent("+cyclePanePrev+")+refresh-preview",
+			"alt-down:execute-silent("+cyclePaneNext+")+refresh-preview",
+		),
 	})
 	if err != nil {
 		return fmt.Errorf("run sessions picker: %w", err)
@@ -164,6 +164,7 @@ func (c *sessionsCommand) buildRows(summaries []inttmux.RecentSessionSummary) ([
 			WindowCount: summary.WindowCount,
 			PaneCount:   summary.PaneCount,
 			Path:        summary.Path,
+			Activity:    summary.Activity,
 		}
 
 		windowIndex, paneIndex, err := c.resolveSelection(summary.Name)
@@ -209,7 +210,7 @@ func sessionsPreviewWindow(ui string) string {
 	if ui == switchUISidebar {
 		return "right,60%,border-left"
 	}
-	return "down,45%,border-top"
+	return "right,60%,border-left"
 }
 
 func sessionsPickerFooter() string {

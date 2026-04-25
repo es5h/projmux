@@ -16,39 +16,54 @@ func RenderSwitchPreview(model corepreview.SwitchReadModel, ui string) string {
 
 	var builder strings.Builder
 
-	builder.WriteString("dir: ")
-	builder.WriteString(sanitizeSwitchPreviewPath(model))
-	builder.WriteString("\n")
-
-	builder.WriteString("session: ")
-	builder.WriteString(sanitizeCell(model.SessionName))
-	builder.WriteString("\n")
-
-	builder.WriteString("state: ")
-	builder.WriteString(sanitizeCell(model.SessionMode))
-	builder.WriteString("\n")
+	writePopupSection(&builder, "Target")
+	writePopupKV(&builder, "dir", sanitizeSwitchPreviewPath(model))
+	writePopupKV(&builder, "session", sanitizeCell(model.SessionName))
+	writePopupKV(&builder, "mode", formatPopupSwitchPreviewMode(model.SessionMode))
 
 	if branch := sanitizeCell(model.GitBranch); branch != "" {
-		builder.WriteString("git: ")
-		builder.WriteString(branch)
+		writePopupKV(&builder, "git", branch)
+	}
+	if kube := formatKubeSummary(model); kube != "" {
+		writePopupKV(&builder, "k8s", kube)
+	}
+
+	builder.WriteString("\n")
+
+	if model.SessionMode != "existing" {
+		writePopupSection(&builder, "Action")
+		writePopupKV(&builder, "enter", "switch/create this session")
+		writePopupKV(&builder, "result", "tmux new-session -d -s <name> -c <dir>")
+		return builder.String()
+	}
+
+	writePopupSection(&builder, "Windows")
+	writeWindows(&builder, model.Popup)
+
+	builder.WriteString("\n")
+	writePopupSection(&builder, "Panes")
+	writePanes(&builder, model.Popup)
+
+	if snapshot := strings.TrimRight(model.Popup.PaneSnapshot, "\r\n"); snapshot != "" {
+		builder.WriteString("\n")
+		writePopupSection(&builder, "Pane Snapshot")
+		writePopupRule(&builder)
+		builder.WriteString(snapshot)
 		builder.WriteString("\n")
 	}
 
-	builder.WriteString("summary: ")
-	builder.WriteString(formatPopupSummary(model.Popup))
-	builder.WriteString("\n")
-
-	builder.WriteString("selected: ")
-	builder.WriteString(formatSelectedSummary(model.Popup))
-	builder.WriteString("\n")
-
-	builder.WriteString("windows:\n")
-	writeWindows(&builder, model.Popup)
-
-	builder.WriteString("panes:\n")
-	writePanes(&builder, model.Popup)
-
 	return builder.String()
+}
+
+func formatPopupSwitchPreviewMode(mode string) string {
+	switch sanitizeCell(mode) {
+	case "existing":
+		return ansiGreen + "existing" + ansiReset
+	case "new":
+		return ansiYellow + "new session" + ansiReset
+	default:
+		return sanitizeCell(mode)
+	}
 }
 
 func renderSidebarSwitchPreview(model corepreview.SwitchReadModel) string {
@@ -77,8 +92,26 @@ func renderSidebarSwitchPreview(model corepreview.SwitchReadModel) string {
 		builder.WriteString(formatSidebarWindowSummary(window, model.Panes))
 		builder.WriteString("\n")
 	}
+	if kube := formatKubeSummary(model); kube != "" {
+		builder.WriteString("\n")
+		builder.WriteString("k8s:")
+		builder.WriteString(kube)
+		builder.WriteString("\n")
+	}
 
 	return builder.String()
+}
+
+func formatKubeSummary(model corepreview.SwitchReadModel) string {
+	context := sanitizeCell(model.KubeContext)
+	if context == "" {
+		return ""
+	}
+	namespace := sanitizeCell(model.KubeNamespace)
+	if namespace == "" {
+		namespace = "default"
+	}
+	return ansiRed + context + ansiReset + "/" + ansiBlue + namespace + ansiReset
 }
 
 func writeSidebarSection(builder *strings.Builder, title string) {

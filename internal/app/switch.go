@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/es5h/projmux/internal/config"
 	"github.com/es5h/projmux/internal/core/candidates"
@@ -26,7 +27,7 @@ const (
 	switchUIFlag             = "ui"
 	switchUIPopup            = "popup"
 	switchUISidebar          = "sidebar"
-	switchTagExpectKey       = "alt-t"
+	switchKillExpectKey      = "ctrl-x"
 	switchPinExpectKey       = "alt-p"
 	switchSettingsSentinel   = "__projmux_settings__"
 	switchContextSessionEnv  = "TMUX_SESSIONIZER_CONTEXT_SESSION"
@@ -66,6 +67,14 @@ type switchSessionInspector interface {
 	SessionExists(ctx context.Context, sessionName string) (bool, error)
 }
 
+type switchSessionKiller interface {
+	KillSession(ctx context.Context, sessionName string) error
+}
+
+type switchRecentSessionsResolver interface {
+	RecentSessions(ctx context.Context) ([]string, error)
+}
+
 type switchPreviewStore interface {
 	ReadSelection(sessionName string) (corepreview.Selection, bool, error)
 	CyclePaneSelection(sessionName string, windows []corepreview.Window, panes []corepreview.Pane, direction corepreview.Direction) (corepreview.CycleResult, error)
@@ -90,6 +99,13 @@ type switchCommand struct {
 	workingDir      func() (string, error)
 	lookupEnv       func(string) string
 	gitBranch       func(string) string
+	kubeInfo        func(sessionName string) switchKubeInfo
+	focusSession    string
+}
+
+type switchKubeInfo struct {
+	Context   string
+	Namespace string
 }
 
 type switchPlan struct {
@@ -125,6 +141,7 @@ func newSwitchCommand() *switchCommand {
 		workingDir:  os.Getwd,
 		lookupEnv:   os.Getenv,
 		gitBranch:   detectGitBranch,
+		kubeInfo:    defaultSwitchKubeInfo,
 	}
 	if pathsErr != nil {
 		cmd.previewStoreErr = fmt.Errorf("resolve default config paths: %w", pathsErr)
@@ -162,6 +179,8 @@ func (c *switchCommand) Run(args []string, stdout, stderr io.Writer) error {
 			return c.runToggleTag(args[1:], stdout, stderr)
 		case "toggle-pin":
 			return c.runTogglePin(args[1:], stdout, stderr)
+		case "kill":
+			return c.runKill(args[1:], stdout, stderr)
 		case "settings":
 			return c.runSettings(stdout, stderr)
 		case "preview":
@@ -273,6 +292,46 @@ func (c *switchCommand) runTogglePin(args []string, stdout, stderr io.Writer) er
 	}
 
 	return c.togglePin(target, stdout)
+}
+
+func (c *switchCommand) runKill(args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("switch kill", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.Usage = func() {
+		printSwitchUsage(stderr)
+	}
+
+	if err := fs.Parse(args); err != nil {
+		printSwitchUsage(stderr)
+		return err
+	}
+	if fs.NArg() > 1 {
+		printSwitchUsage(stderr)
+		return fmt.Errorf("switch kill accepts at most 1 [path] argument")
+	}
+
+	target, err := c.resolveSwitchTarget(fs.Args(), "switch kill")
+	if err != nil {
+		if strings.Contains(err.Error(), "switch kill requires") {
+			printSwitchUsage(stderr)
+		}
+		return err
+	}
+	if target == switchSettingsSentinel {
+		return nil
+	}
+	if c.identityErr != nil {
+		return fmt.Errorf("configure session identity resolver: %w", c.identityErr)
+	}
+	if c.identity == nil {
+		return fmt.Errorf("switch session identity resolver is not configured")
+	}
+	sessionName, err := c.identity.SessionIdentityForPath(target)
+	if err != nil {
+		return fmt.Errorf("resolve switch kill session identity: %w", err)
+	}
+
+	return c.killFocusedSession(context.Background(), sessionName, "", stdout)
 }
 
 func (c *switchCommand) runPreview(args []string, stdout, stderr io.Writer) error {
@@ -438,7 +497,7 @@ func (c *switchCommand) planFromInputs(ui string, inputs candidates.Inputs) (swi
 		Candidates:    paths,
 		HomeDir:       homeDir,
 		CurrentPath:   cleanOptionalPath(inputs.CurrentPath),
-		OriginSession: strings.TrimSpace(c.env(switchContextSessionEnv)),
+		OriginSession: c.originSession(),
 	}
 
 	return c.completePlan(plan)
@@ -462,10 +521,11 @@ func (c *switchCommand) candidateInputs(currentPath string) (candidates.Inputs, 
 		}
 	}
 
+	repoRoot := c.switchRepoRoot(homeDir)
 	return candidates.Inputs{
 		HomeDir:      homeDir,
-		RepoRoot:     cleanOptionalPath(c.env(repoRootEnvVar)),
-		ManagedRoots: switchManagedRoots(homeDir, c.env(repoRootEnvVar), c.lookupEnv),
+		RepoRoot:     repoRoot,
+		ManagedRoots: switchManagedRoots(homeDir, repoRoot, c.lookupEnv),
 		Pins:         pins,
 		CurrentPath:  currentPath,
 	}, nil
@@ -604,7 +664,7 @@ func (c *switchCommand) previewModel(ctx context.Context, target string) (corepr
 	if err != nil {
 		return corepreview.SwitchReadModel{}, err
 	}
-	repoRoot := cleanOptionalPath(c.env(repoRootEnvVar))
+	repoRoot := c.switchRepoRoot(homeDir)
 
 	if c.identityErr != nil {
 		return corepreview.SwitchReadModel{}, fmt.Errorf("configure session identity resolver: %w", c.identityErr)
@@ -633,6 +693,11 @@ func (c *switchCommand) previewModel(ctx context.Context, target string) (corepr
 	if !exists {
 		return corepreview.BuildSwitchReadModel(modelInputs), nil
 	}
+	if c.kubeInfo != nil {
+		kube := c.kubeInfo(sessionName)
+		modelInputs.KubeContext = kube.Context
+		modelInputs.KubeNamespace = kube.Namespace
+	}
 
 	store, err := c.requireSwitchPreviewStore()
 	if err != nil {
@@ -660,7 +725,9 @@ func (c *switchCommand) previewModel(ctx context.Context, target string) (corepr
 	modelInputs.HasStoredSelection = hasSelection
 	modelInputs.Windows = windows
 	modelInputs.Panes = panes
-	return corepreview.BuildSwitchReadModel(modelInputs), nil
+	model := corepreview.BuildSwitchReadModel(modelInputs)
+	model.Popup.PaneSnapshot = capturePaneSnapshot(ctx, inventory, model.Popup, -60)
+	return model, nil
 }
 
 type switchCycleFunc func(store switchPreviewStore, sessionName string, windows []corepreview.Window, panes []corepreview.Pane, direction corepreview.Direction) (corepreview.CycleResult, error)
@@ -797,6 +864,27 @@ func (c *switchCommand) env(name string) string {
 	return c.lookupEnv(name)
 }
 
+func (c *switchCommand) originSession() string {
+	if sessionName := strings.TrimSpace(c.focusSession); sessionName != "" {
+		return sessionName
+	}
+	return strings.TrimSpace(c.env(switchContextSessionEnv))
+}
+
+func (c *switchCommand) switchRepoRoot(homeDir string) string {
+	return switchRepoRoot(homeDir, c.lookupEnv)
+}
+
+func switchRepoRoot(homeDir string, lookup func(string) string) string {
+	if repoRoot := cleanOptionalPath(envValue(lookup, repoRootEnvVar)); repoRoot != "" {
+		return repoRoot
+	}
+	if homeDir == "" {
+		return ""
+	}
+	return cleanOptionalPath(filepath.Join(homeDir, "source", "repos"))
+}
+
 func switchManagedRoots(homeDir, repoRoot string, lookup func(string) string) []string {
 	roots := make([]string, 0)
 	seen := make(map[string]struct{})
@@ -832,7 +920,7 @@ func switchManagedRoots(homeDir, repoRoot string, lookup func(string) string) []
 }
 
 func defaultManagedRoots(homeDir, repoRoot string) []string {
-	roots := make([]string, 0, 6)
+	roots := make([]string, 0, 7)
 	for _, root := range []string{
 		filepath.Join(homeDir, "source"),
 		filepath.Join(homeDir, "work"),
@@ -936,13 +1024,11 @@ func (c *switchCommand) completePlan(plan switchPlan) (switchPlan, error) {
 		return switchPlan{}, err
 	}
 
-	if plan.Action != switchTagExpectKey {
-		sessionName, err := c.identity.SessionIdentityForPath(selection)
-		if err != nil {
-			return switchPlan{}, fmt.Errorf("resolve session identity: %w", err)
-		}
-		plan.SessionName = sessionName
+	sessionName, err := c.identity.SessionIdentityForPath(selection)
+	if err != nil {
+		return switchPlan{}, fmt.Errorf("resolve session identity: %w", err)
 	}
+	plan.SessionName = sessionName
 
 	return plan, nil
 }
@@ -957,10 +1043,21 @@ func (c *switchCommand) execute(ctx context.Context, plan switchPlan, stdout io.
 		}
 		return false, nil
 	}
-	if plan.Action == switchTagExpectKey {
-		if err := c.toggleTag(plan.Selection, nil); err != nil {
+	if plan.Action == switchKillExpectKey {
+		if cleanOptionalPath(plan.Selection) == cleanOptionalPath(plan.HomeDir) {
+			return true, nil
+		}
+		fallbackSession, err := c.previousActiveSession(ctx, plan.SessionName)
+		if err != nil {
 			return false, err
 		}
+		if fallbackSession == "" {
+			return true, nil
+		}
+		if err := c.killFocusedSession(ctx, plan.SessionName, fallbackSession, nil); err != nil {
+			return false, err
+		}
+		c.focusSession = fallbackSession
 		return true, nil
 	}
 	if plan.Action == switchPinExpectKey {
@@ -1038,7 +1135,7 @@ func (c *switchCommand) runPicker(plan switchPlan) (intfzf.Result, error) {
 		Entries:    plan.Rows,
 		Prompt:     "› ",
 		Footer:     switchPickerFooter(plan.UI),
-		ExpectKeys: []string{switchTagExpectKey, switchPinExpectKey},
+		ExpectKeys: []string{switchKillExpectKey, switchPinExpectKey},
 	}
 	if previewCommand, bindings, err := c.switchPickerSurface(plan); err != nil {
 		return intfzf.Result{}, err
@@ -1088,7 +1185,7 @@ func (c *switchCommand) switchPickerSurface(plan switchPlan) (string, []string, 
 		return "", nil, fmt.Errorf("build switch pane-next command: %w", err)
 	}
 
-	bindings := []string{}
+	bindings := pickerCloseBindings()
 	if plan.UI == switchUISidebar {
 		if pos := switchSidebarInitialPos(plan); pos > 0 {
 			bindings = append(bindings, fmt.Sprintf("start:pos(%d)", pos))
@@ -1111,6 +1208,16 @@ func (c *switchCommand) switchPickerSurface(plan switchPlan) (string, []string, 
 	return previewCommand, bindings, nil
 }
 
+func pickerCloseBindings() []string {
+	return []string{
+		"esc:abort",
+		"ctrl-n:abort",
+		"alt-1:abort",
+		"alt-2:abort",
+		"alt-3:abort",
+	}
+}
+
 func switchPreviewWindow(ui string) string {
 	switch ui {
 	case switchUISidebar:
@@ -1126,13 +1233,13 @@ func switchPickerFooter(ui string) string {
 	if ui == switchUISidebar {
 		return strings.Join([]string{
 			"Enter: switch/create",
-			"Alt-T: tag focused directory",
+			"Ctrl-X: kill focused session",
 			"Alt-P: pin/unpin focused directory",
 		}, "\n")
 	}
 	return strings.Join([]string{
 		"Enter: switch/create previewed target",
-		"Alt-T: tag focused directory",
+		"Ctrl-X: kill focused session",
 		"Alt-P: pin/unpin focused directory",
 		"Left/Right: preview window",
 		"Alt-Up/Alt-Down: preview pane",
@@ -1176,6 +1283,72 @@ func switchSessionNameForRow(plan switchPlan, value string) string {
 		return ""
 	}
 	return strings.TrimSpace(plan.SessionNames[cleanOptionalPath(value)])
+}
+
+func (c *switchCommand) previousActiveSession(ctx context.Context, targetSession string) (string, error) {
+	resolver, ok := c.sessions.(switchRecentSessionsResolver)
+	if !ok || resolver == nil {
+		return "", nil
+	}
+	recent, err := resolver.RecentSessions(ctx)
+	if err != nil {
+		return "", fmt.Errorf("resolve previous active tmux session: %w", err)
+	}
+	targetSession = strings.TrimSpace(targetSession)
+	for _, sessionName := range recent {
+		sessionName = strings.TrimSpace(sessionName)
+		if sessionName == "" || sessionName == targetSession {
+			continue
+		}
+		exists, err := c.switchSessionExists(ctx, sessionName)
+		if err != nil {
+			return "", err
+		}
+		if exists {
+			return sessionName, nil
+		}
+	}
+	return "", nil
+}
+
+func (c *switchCommand) killFocusedSession(ctx context.Context, sessionName, fallbackSession string, stdout io.Writer) error {
+	sessionName = strings.TrimSpace(sessionName)
+	if sessionName == "" {
+		return fmt.Errorf("switch kill requires a target session")
+	}
+	if c.sessions == nil {
+		return fmt.Errorf("switch session executor is not configured")
+	}
+
+	inspector, _ := c.sessions.(switchSessionInspector)
+	if inspector != nil {
+		exists, err := inspector.SessionExists(ctx, sessionName)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return nil
+		}
+	}
+
+	killer, ok := c.sessions.(switchSessionKiller)
+	if !ok || killer == nil {
+		return fmt.Errorf("switch session killer is not configured")
+	}
+	fallbackSession = strings.TrimSpace(fallbackSession)
+	if fallbackSession != "" && fallbackSession != sessionName {
+		if err := c.sessions.OpenSession(ctx, fallbackSession); err != nil {
+			return fmt.Errorf("open fallback tmux session %q before kill: %w", fallbackSession, err)
+		}
+	}
+	if err := killer.KillSession(ctx, sessionName); err != nil {
+		return fmt.Errorf("kill tmux session %q: %w", sessionName, err)
+	}
+	if stdout != nil {
+		_, err := fmt.Fprintf(stdout, "killed: %s\n", sessionName)
+		return err
+	}
+	return nil
 }
 
 func (c *switchCommand) toggleTag(target string, stdout io.Writer) error {
@@ -1255,12 +1428,8 @@ func (c *switchCommand) renderRows(ctx context.Context, ui string, candidatePath
 	if err != nil {
 		return nil, nil, err
 	}
-	repoRoot := cleanOptionalPath(c.env(repoRootEnvVar))
+	repoRoot := c.switchRepoRoot(homeDir)
 	pinnedSet, err := c.loadPinnedSet()
-	if err != nil {
-		return nil, nil, err
-	}
-	taggedSet, err := c.loadTaggedSet()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1294,14 +1463,15 @@ func (c *switchCommand) renderRows(ctx context.Context, ui string, candidatePath
 		renderCandidates = append(renderCandidates, intrender.SwitchCandidate{
 			Path:        candidatePath,
 			DisplayPath: intrender.PrettyPath(candidatePath, homeDir, repoRoot),
+			DisplayName: switchProjectName(candidatePath),
 			SessionName: sessionName,
 			ModeLabel:   modeLabel,
 			UI:          ui,
 			Pinned:      pinnedSet[cleanOptionalPath(candidatePath)],
-			Tagged:      taggedSet[cleanOptionalPath(candidatePath)],
 		})
 	}
 
+	sortSwitchCandidates(renderCandidates, homeDir)
 	rows := intrender.BuildSwitchRows(renderCandidates)
 	entries := make([]intfzf.Entry, 0, len(rows))
 	for _, row := range rows {
@@ -1312,6 +1482,73 @@ func (c *switchCommand) renderRows(ctx context.Context, ui string, candidatePath
 	}
 
 	return entries, sessionNames, nil
+}
+
+func sortSwitchCandidates(candidates []intrender.SwitchCandidate, homeDir string) {
+	homeDir = cleanOptionalPath(homeDir)
+	slices.SortStableFunc(candidates, func(a, b intrender.SwitchCandidate) int {
+		if a.Path == switchSettingsSentinel && b.Path != switchSettingsSentinel {
+			return 1
+		}
+		if b.Path == switchSettingsSentinel && a.Path != switchSettingsSentinel {
+			return -1
+		}
+
+		aHome := homeDir != "" && cleanOptionalPath(a.Path) == homeDir
+		bHome := homeDir != "" && cleanOptionalPath(b.Path) == homeDir
+		if aHome != bHome {
+			if aHome {
+				return -1
+			}
+			return 1
+		}
+
+		aExisting := a.ModeLabel == "existing"
+		bExisting := b.ModeLabel == "existing"
+		if aExisting != bExisting {
+			if aExisting {
+				return -1
+			}
+			return 1
+		}
+
+		aPinned := a.Pinned
+		bPinned := b.Pinned
+		if aPinned != bPinned {
+			if aPinned {
+				return -1
+			}
+			return 1
+		}
+
+		aName := strings.ToLower(strings.TrimSpace(a.DisplayName))
+		bName := strings.ToLower(strings.TrimSpace(b.DisplayName))
+		if aName < bName {
+			return -1
+		}
+		if aName > bName {
+			return 1
+		}
+		if a.Path < b.Path {
+			return -1
+		}
+		if a.Path > b.Path {
+			return 1
+		}
+		return 0
+	})
+}
+
+func switchProjectName(path string) string {
+	path = cleanOptionalPath(path)
+	if path == "" {
+		return ""
+	}
+	name := filepath.Base(path)
+	if name == "." || name == string(filepath.Separator) {
+		return path
+	}
+	return name
 }
 
 func (c *switchCommand) loadPinnedSet() (map[string]bool, error) {
@@ -1379,6 +1616,7 @@ func printSwitchUsage(w io.Writer) {
 	fmt.Fprintln(w, "  projmux switch [--ui=popup|sidebar]")
 	fmt.Fprintln(w, "  projmux switch toggle-tag [path]")
 	fmt.Fprintln(w, "  projmux switch toggle-pin [path]")
+	fmt.Fprintln(w, "  projmux switch kill [path]")
 	fmt.Fprintln(w, "  projmux switch settings")
 	fmt.Fprintln(w, "  projmux switch preview [path]")
 	fmt.Fprintln(w, "  projmux switch cycle-pane <path> <next|prev>")
@@ -1388,7 +1626,7 @@ func printSwitchUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --ui string   Candidate surface to prepare (popup or sidebar) (default \"popup\")")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Picker Actions:")
-	fmt.Fprintln(w, "  alt-t         Toggle a tag on the focused candidate and reopen the picker")
+	fmt.Fprintln(w, "  ctrl-x        Kill the focused existing session and reopen the picker")
 	fmt.Fprintln(w, "  alt-p         Toggle a pin on the focused candidate and reopen the picker")
 }
 
@@ -1402,7 +1640,7 @@ func (c *switchCommand) settingsEntries() ([]intfzf.Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	repoRoot := cleanOptionalPath(c.env(repoRootEnvVar))
+	repoRoot := c.switchRepoRoot(homeDir)
 
 	entries := make([]intfzf.Entry, 0, len(pins)+3)
 	entries = append(entries, intfzf.Entry{
@@ -1455,7 +1693,7 @@ func (c *switchCommand) addPinEntries() ([]intfzf.Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	repoRoot := cleanOptionalPath(c.env(repoRootEnvVar))
+	repoRoot := c.switchRepoRoot(homeDir)
 
 	entries := make([]intfzf.Entry, 0, len(paths))
 	for _, path := range paths {
@@ -1482,7 +1720,7 @@ func (c *switchCommand) writeSettingsPreview(stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	repoRoot := cleanOptionalPath(c.env(repoRootEnvVar))
+	repoRoot := c.switchRepoRoot(homeDir)
 
 	var builder strings.Builder
 	builder.WriteString("settings\n")
@@ -1531,6 +1769,53 @@ func detectGitBranch(path string) string {
 		return strings.TrimSpace(string(output))
 	}
 	return ""
+}
+
+func defaultSwitchKubeInfo(sessionName string) switchKubeInfo {
+	sessionName = strings.TrimSpace(sessionName)
+	if sessionName == "" {
+		return switchKubeInfo{}
+	}
+	path := switchKubeSessionPath(sessionName)
+	if path == "" {
+		return switchKubeInfo{}
+	}
+	if _, err := os.Stat(path); err != nil {
+		return switchKubeInfo{}
+	}
+	if _, err := exec.LookPath("kubectl"); err != nil {
+		return switchKubeInfo{}
+	}
+	return switchKubeInfo{
+		Context:   runKubectlConfig(path, "current-context"),
+		Namespace: runKubectlConfig(path, "view", "--minify", "--output", "jsonpath={..namespace}"),
+	}
+}
+
+func switchKubeSessionPath(sessionName string) string {
+	root := strings.TrimRight(os.Getenv("XDG_RUNTIME_DIR"), string(filepath.Separator))
+	if root == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil || strings.TrimSpace(homeDir) == "" {
+			return ""
+		}
+		root = filepath.Join(homeDir, ".cache")
+	}
+	return filepath.Join(root, "kube-sessions", sessionName+".yaml")
+}
+
+func runKubectlConfig(kubeconfig string, args ...string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	fullArgs := append([]string{"config"}, args...)
+	cmd := exec.CommandContext(ctx, "kubectl", fullArgs...)
+	cmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
 }
 
 func (c *switchCommand) clearPins() error {

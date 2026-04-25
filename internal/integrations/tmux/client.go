@@ -77,6 +77,7 @@ type Window struct {
 
 // Pane describes a tmux pane inventory row.
 type Pane struct {
+	ID          string
 	SessionName string
 	WindowIndex int
 	PaneIndex   int
@@ -260,7 +261,7 @@ func (c *Client) ListSessionWindows(ctx context.Context, sessionName string) ([]
 
 // ListAllPanes lists tmux panes across all sessions with active hints.
 func (c *Client) ListAllPanes(ctx context.Context) ([]Pane, error) {
-	output, err := c.runner.Run(ctx, "tmux", "list-panes", "-a", "-F", "#{session_name}\t#{window_index}\t#{pane_index}\t#{?pane_active,1,0}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}")
+	output, err := c.runner.Run(ctx, "tmux", "list-panes", "-a", "-F", "#{session_name}\t#{pane_id}\t#{window_index}\t#{pane_index}\t#{?pane_active,1,0}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}")
 	if err != nil {
 		return nil, fmt.Errorf("list tmux panes: %w", err)
 	}
@@ -271,6 +272,21 @@ func (c *Client) ListAllPanes(ctx context.Context) ([]Pane, error) {
 	}
 
 	return panes, nil
+}
+
+// CapturePane returns visible text from a tmux pane starting at the requested
+// history offset.
+func (c *Client) CapturePane(ctx context.Context, paneTarget string, startLine int) (string, error) {
+	paneTarget = strings.TrimSpace(paneTarget)
+	if paneTarget == "" {
+		return "", errPaneIndexInvalid
+	}
+
+	output, err := c.runner.Run(ctx, "tmux", "capture-pane", "-p", "-t", paneTarget, "-S", strconv.Itoa(startLine))
+	if err != nil {
+		return "", fmt.Errorf("capture tmux pane %q: %w", paneTarget, err)
+	}
+	return strings.TrimRight(string(output), "\r\n"), nil
 }
 
 // ListWindowPanes lists panes for a tmux session window with active hints.
@@ -934,7 +950,7 @@ func parseAllPanes(output []byte) ([]Pane, error) {
 		}
 
 		fields := strings.Split(rawLine, "\t")
-		if len(fields) != 7 {
+		if len(fields) != 8 {
 			return nil, fmt.Errorf("parse tmux panes: malformed row %q", rawLine)
 		}
 
@@ -943,26 +959,27 @@ func parseAllPanes(output []byte) ([]Pane, error) {
 			return nil, errSessionNameRequired
 		}
 
-		windowIndex, err := strconv.Atoi(strings.TrimSpace(fields[1]))
+		windowIndex, err := strconv.Atoi(strings.TrimSpace(fields[2]))
 		if err != nil {
 			return nil, errWindowIndexInvalid
 		}
-		paneIndex, err := strconv.Atoi(strings.TrimSpace(fields[2]))
+		paneIndex, err := strconv.Atoi(strings.TrimSpace(fields[3]))
 		if err != nil {
 			return nil, errPaneIndexInvalid
 		}
-		active, err := parseActiveFlag(fields[3])
+		active, err := parseActiveFlag(fields[4])
 		if err != nil {
 			return nil, err
 		}
 
 		panes = append(panes, Pane{
+			ID:          strings.TrimSpace(fields[1]),
 			SessionName: sessionName,
 			WindowIndex: windowIndex,
 			PaneIndex:   paneIndex,
-			Title:       strings.TrimSpace(fields[4]),
-			Command:     strings.TrimSpace(fields[5]),
-			Path:        strings.TrimSpace(fields[6]),
+			Title:       strings.TrimSpace(fields[5]),
+			Command:     strings.TrimSpace(fields[6]),
+			Path:        strings.TrimSpace(fields[7]),
 			Active:      active,
 		})
 	}
