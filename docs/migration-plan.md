@@ -74,3 +74,12 @@ The standalone tmux path is:
 5. `projmux ai status`, `projmux ai notify`, and `projmux ai watch-title` replace the AI pane state and notification shell scripts.
 6. `projmux status <git|kube>` replaces tmux status-bar segment scripts for git branch and kube context rendering.
 7. Dotfiles may keep sourcing the generated config or keep wrapper scripts, but no session-management popup or attention badge flow should require dotfiles.
+
+## App tmux runtime
+
+The app runtime path is:
+
+1. `projmux shell` writes `~/.config/projmux/tmux.conf` and launches `tmux -L projmux -f ~/.config/projmux/tmux.conf new-session -A -s main`.
+2. `projmux tmux print-app-config` prints the config used by that isolated app server.
+3. `projmux tmux install-app` writes the app config without touching `~/.tmux.conf`.
+4. The app runtime uses a separate tmux socket and config from the user's normal tmux server, so projmux can own its status bar, bindings, badge, and popup behavior.

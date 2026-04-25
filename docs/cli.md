@@ -9,6 +9,7 @@
 ## Proposed commands
 
 ### Session navigation
+- `projmux shell`
 - `projmux switch`
 - `projmux current`
 - `projmux sessions`
@@ -46,7 +47,9 @@
 ### Tmux-facing helper entrypoints
 - `projmux tmux popup-toggle <mode>`
 - `projmux tmux print-config [--bin <path>]`
+- `projmux tmux print-app-config [--bin <path>]`
 - `projmux tmux install [--bin <path>] [--config <path>] [--include <path>]`
+- `projmux tmux install-app [--bin <path>] [--config <path>]`
 - `projmux tmux popup-switch`
 - `projmux tmux popup-sessions`
 - `projmux tmux popup-preview <session>`
