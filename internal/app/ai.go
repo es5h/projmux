@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	intfzf "github.com/es5h/projmux/internal/ui/fzf"
@@ -112,6 +113,9 @@ func (c *aiCommand) runPicker(args []string, stderr io.Writer) error {
 
 	result, err := c.runAgentPicker(direction)
 	if err != nil {
+		if isNoSelectionExit(err) {
+			return nil
+		}
 		return err
 	}
 	if result.Value == "" || result.Key != "enter" {
@@ -170,6 +174,9 @@ func (c *aiCommand) runSettings(args []string, stdout, stderr io.Writer) error {
 		},
 	})
 	if err != nil {
+		if isNoSelectionExit(err) {
+			return nil
+		}
 		return fmt.Errorf("run ai settings picker: %w", err)
 	}
 	if result.Key != "enter" || result.Value == "" {
@@ -288,7 +295,11 @@ func (c *aiCommand) openPicker(direction string) error {
 	targetPane := c.resolveTargetPane()
 	command := shellEnv("TMUX_SPLIT_TARGET_PANE", targetPane) + shellQuote(binaryPath) + " ai picker --inside " + shellQuote(direction)
 	width, height := c.popupSize(40, 64, 30, 12)
-	return c.run("tmux", "display-popup", "-E", "-w", width, "-h", height, command)
+	err = c.run("tmux", "display-popup", "-E", "-w", width, "-h", height, command)
+	if isNoSelectionExit(err) {
+		return nil
+	}
+	return err
 }
 
 func (c *aiCommand) runAgentSplit(mode, direction string) error {
@@ -543,6 +554,23 @@ func runExternalCommand(ctx context.Context, name string, args ...string) error 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func isNoSelectionExit(err error) bool {
+	if err == nil {
+		return false
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+			switch status.ExitStatus() {
+			case 1, 130:
+				return true
+			}
+		}
+	}
+	message := err.Error()
+	return strings.Contains(message, "exit status 1") || strings.Contains(message, "exit status 130")
 }
 
 func readExternalCommand(ctx context.Context, name string, args ...string) ([]byte, error) {

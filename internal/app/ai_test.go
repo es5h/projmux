@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -89,6 +90,25 @@ func TestAISplitSelectiveOpensPickerPopup(t *testing.T) {
 	}}
 	if !reflect.DeepEqual(cmdRecorder(cmd).commands, want) {
 		t.Fatalf("commands = %#v, want %#v", cmdRecorder(cmd).commands, want)
+	}
+}
+
+func TestAISplitSelectiveTreatsCancelledPickerAsNoOp(t *testing.T) {
+	home := t.TempDir()
+	cmd := testAICommand(home)
+	cmd.executable = func() (string, error) { return "/tmp/projmux", nil }
+	cmd.lookupEnv = func(name string) string {
+		if name == "TMUX" {
+			return "/tmp/tmux"
+		}
+		return ""
+	}
+	cmd.runCommand = func(context.Context, string, ...string) error {
+		return errors.New("exit status 1")
+	}
+
+	if err := cmd.Run([]string{"split", "right"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run split canceled picker error = %v, want nil", err)
 	}
 }
 
