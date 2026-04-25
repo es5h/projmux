@@ -34,3 +34,4 @@
 - replace shell wrappers with thin `projmux` wrappers
 - update dotfiles install flow
 - document migration steps for source and target machines
+- define picker-agnostic popup close/toggle handling so AI picker dismissal does not depend on fzf-specific key bindings
