@@ -22,14 +22,15 @@ type SwitchRow struct {
 }
 
 type SwitchCandidate struct {
-	Path        string
-	DisplayPath string
-	DisplayName string
-	SessionName string
-	ModeLabel   string
-	UI          string
-	Pinned      bool
-	Tagged      bool
+	Path          string
+	DisplayPath   string
+	DisplayName   string
+	SessionName   string
+	ModeLabel     string
+	UI            string
+	AttentionRank int
+	Pinned        bool
+	Tagged        bool
 }
 
 func PrettyPath(path, homeDir, repoRoot string) string {
@@ -142,7 +143,8 @@ func formatPopupModeLabel(mode string) string {
 }
 
 func formatSidebarSwitchLabel(candidate SwitchCandidate) string {
-	parts := make([]string, 0, 4)
+	parts := make([]string, 0, 5)
+	parts = append(parts, formatAttentionBadge(candidate.AttentionRank))
 	parts = append(parts, formatTagBadge(candidate.Tagged))
 	parts = append(parts, formatPinBadge(candidate.Pinned))
 
@@ -163,6 +165,17 @@ func formatSidebarSwitchLabel(candidate SwitchCandidate) string {
 	}
 
 	return strings.Join(parts, " ")
+}
+
+func formatAttentionBadge(rank int) string {
+	switch rank {
+	case 2:
+		return ansiYellow + "●" + ansiReset
+	case 1:
+		return ansiGreen + "●" + ansiReset
+	default:
+		return " "
+	}
 }
 
 func formatSidebarSessionName(sessionName, mode string) string {

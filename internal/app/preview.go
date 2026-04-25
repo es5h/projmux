@@ -215,17 +215,19 @@ func (i tmuxPreviewInventory) SessionPanes(ctx context.Context, sessionName stri
 
 	panes := make([]corepreview.Pane, 0, len(rows))
 	for _, row := range rows {
-		if row.SessionName != sessionName {
+		if sessionName != "" && row.SessionName != sessionName {
 			continue
 		}
 		panes = append(panes, corepreview.Pane{
-			ID:          row.ID,
-			WindowIndex: strconv.Itoa(row.WindowIndex),
-			Index:       strconv.Itoa(row.PaneIndex),
-			Title:       row.Title,
-			Command:     row.Command,
-			Path:        row.Path,
-			Active:      row.Active,
+			ID:             row.ID,
+			SessionName:    row.SessionName,
+			WindowIndex:    strconv.Itoa(row.WindowIndex),
+			Index:          strconv.Itoa(row.PaneIndex),
+			Title:          row.Title,
+			AttentionState: row.AttentionState,
+			Command:        row.Command,
+			Path:           row.Path,
+			Active:         row.Active,
 		})
 	}
 	return panes, nil

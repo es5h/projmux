@@ -34,13 +34,15 @@ type Window struct {
 
 // Pane models a previewable tmux pane with its parent window and active hint.
 type Pane struct {
-	ID          string
-	WindowIndex string
-	Index       string
-	Title       string
-	Command     string
-	Path        string
-	Active      bool
+	ID             string
+	SessionName    string
+	WindowIndex    string
+	Index          string
+	Title          string
+	AttentionState string
+	Command        string
+	Path           string
+	Active         bool
 }
 
 // CycleInputs captures the pure state needed to move the preview cursor.

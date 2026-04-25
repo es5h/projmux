@@ -77,14 +77,15 @@ type Window struct {
 
 // Pane describes a tmux pane inventory row.
 type Pane struct {
-	ID          string
-	SessionName string
-	WindowIndex int
-	PaneIndex   int
-	Title       string
-	Command     string
-	Path        string
-	Active      bool
+	ID             string
+	SessionName    string
+	WindowIndex    int
+	PaneIndex      int
+	Title          string
+	AttentionState string
+	Command        string
+	Path           string
+	Active         bool
 }
 
 // WindowPane describes a tmux pane inventory row scoped to a single window.
@@ -266,7 +267,7 @@ func (c *Client) ListSessionWindows(ctx context.Context, sessionName string) ([]
 
 // ListAllPanes lists tmux panes across all sessions with active hints.
 func (c *Client) ListAllPanes(ctx context.Context) ([]Pane, error) {
-	output, err := c.runner.Run(ctx, "tmux", "list-panes", "-a", "-F", "#{session_name}\t#{pane_id}\t#{window_index}\t#{pane_index}\t#{?pane_active,1,0}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}")
+	output, err := c.runner.Run(ctx, "tmux", "list-panes", "-a", "-F", "#{session_name}\t#{pane_id}\t#{window_index}\t#{pane_index}\t#{?pane_active,1,0}\t#{pane_title}\t#{@dotfiles_attention_state}\t#{pane_current_command}\t#{pane_current_path}")
 	if err != nil {
 		return nil, fmt.Errorf("list tmux panes: %w", err)
 	}
@@ -1002,7 +1003,10 @@ func parseAllPanes(output []byte) ([]Pane, error) {
 		}
 
 		fields := strings.Split(rawLine, "\t")
-		if len(fields) != 8 {
+		if len(fields) == 8 {
+			fields = append(fields[:6], append([]string{""}, fields[6:]...)...)
+		}
+		if len(fields) != 9 {
 			return nil, fmt.Errorf("parse tmux panes: malformed row %q", rawLine)
 		}
 
@@ -1025,14 +1029,15 @@ func parseAllPanes(output []byte) ([]Pane, error) {
 		}
 
 		panes = append(panes, Pane{
-			ID:          strings.TrimSpace(fields[1]),
-			SessionName: sessionName,
-			WindowIndex: windowIndex,
-			PaneIndex:   paneIndex,
-			Title:       strings.TrimSpace(fields[5]),
-			Command:     strings.TrimSpace(fields[6]),
-			Path:        strings.TrimSpace(fields[7]),
-			Active:      active,
+			ID:             strings.TrimSpace(fields[1]),
+			SessionName:    sessionName,
+			WindowIndex:    windowIndex,
+			PaneIndex:      paneIndex,
+			Title:          strings.TrimSpace(fields[5]),
+			AttentionState: strings.TrimSpace(fields[6]),
+			Command:        strings.TrimSpace(fields[7]),
+			Path:           strings.TrimSpace(fields[8]),
+			Active:         active,
 		})
 	}
 

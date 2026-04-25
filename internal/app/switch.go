@@ -1442,6 +1442,10 @@ func (c *switchCommand) renderRows(ctx context.Context, ui string, candidatePath
 		return nil, nil, err
 	}
 	sessionNames := make(map[string]string, len(candidatePaths))
+	attentionRanks := map[string]int(nil)
+	if ui == switchUISidebar {
+		attentionRanks = c.switchAttentionRanks(ctx)
+	}
 
 	for _, candidatePath := range candidatePaths {
 		if candidatePath == switchSettingsSentinel {
@@ -1469,13 +1473,14 @@ func (c *switchCommand) renderRows(ctx context.Context, ui string, candidatePath
 		}
 
 		renderCandidates = append(renderCandidates, intrender.SwitchCandidate{
-			Path:        candidatePath,
-			DisplayPath: intrender.PrettyPath(candidatePath, homeDir, repoRoot),
-			DisplayName: switchProjectName(candidatePath),
-			SessionName: sessionName,
-			ModeLabel:   modeLabel,
-			UI:          ui,
-			Pinned:      pinnedSet[cleanOptionalPath(candidatePath)],
+			Path:          candidatePath,
+			DisplayPath:   intrender.PrettyPath(candidatePath, homeDir, repoRoot),
+			DisplayName:   switchProjectName(candidatePath),
+			SessionName:   sessionName,
+			ModeLabel:     modeLabel,
+			UI:            ui,
+			AttentionRank: attentionRanks[sessionName],
+			Pinned:        pinnedSet[cleanOptionalPath(candidatePath)],
 		})
 	}
 
@@ -1490,6 +1495,35 @@ func (c *switchCommand) renderRows(ctx context.Context, ui string, candidatePath
 	}
 
 	return entries, sessionNames, nil
+}
+
+func (c *switchCommand) switchAttentionRanks(ctx context.Context) map[string]int {
+	inventory, err := c.requireSwitchPreviewInventory()
+	if err != nil {
+		return nil
+	}
+
+	panes, err := inventory.SessionPanes(ctx, "")
+	if err != nil {
+		return nil
+	}
+
+	ranks := make(map[string]int)
+	for _, pane := range panes {
+		sessionName := strings.TrimSpace(pane.SessionName)
+		if sessionName == "" {
+			continue
+		}
+		rank := ranks[sessionName]
+		if pane.AttentionState == attentionStateBusy || hasBraillePrefix(pane.Title) {
+			ranks[sessionName] = 2
+			continue
+		}
+		if rank < 1 && (pane.AttentionState == attentionStateReply || hasAttentionPrefix(pane.Title)) {
+			ranks[sessionName] = 1
+		}
+	}
+	return ranks
 }
 
 func sortSwitchCandidates(candidates []intrender.SwitchCandidate, homeDir string) {

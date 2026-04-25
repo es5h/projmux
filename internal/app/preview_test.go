@@ -272,7 +272,7 @@ func TestTmuxPreviewInventoryMapsPaneMetadata(t *testing.T) {
 	}
 
 	want := []corepreview.Pane{
-		{ID: "%1", WindowIndex: "2", Index: "1", Title: "server", Command: "go", Path: "/repo/dev", Active: true},
+		{ID: "%1", SessionName: "dev", WindowIndex: "2", Index: "1", Title: "server", Command: "go", Path: "/repo/dev", Active: true},
 	}
 	if !equalPreviewPanes(got, want) {
 		t.Fatalf("SessionPanes() = %#v, want %#v", got, want)

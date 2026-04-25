@@ -375,7 +375,7 @@ func TestClientRecentSessionSummariesIncludeAttachedPaneCountAndPath(t *testing.
 			}
 			return []byte("10\tstale\t0\t1\n35\tfresh\t1\t3\n"), nil
 		case 2:
-			if got, want := args, []string{"list-panes", "-a", "-F", "#{session_name}\t#{pane_id}\t#{window_index}\t#{pane_index}\t#{?pane_active,1,0}\t#{pane_title}\t#{pane_current_command}\t#{pane_current_path}"}; !reflect.DeepEqual(got, want) {
+			if got, want := args, []string{"list-panes", "-a", "-F", "#{session_name}\t#{pane_id}\t#{window_index}\t#{pane_index}\t#{?pane_active,1,0}\t#{pane_title}\t#{@dotfiles_attention_state}\t#{pane_current_command}\t#{pane_current_path}"}; !reflect.DeepEqual(got, want) {
 				t.Fatalf("list-panes args = %#v, want %#v", got, want)
 			}
 			return []byte(
@@ -511,7 +511,7 @@ func TestClientListAllPanesParsesRows(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("dotfiles\t%1\t0\t1\t1\tserver\tgo\t/home/tester/source/repos/dotfiles\nhome\t%2\t2\t0\t0\tshell\tzsh\t/home/tester\n"), nil
+		return []byte("dotfiles\t%1\t0\t1\t1\tserver\tbusy\tgo\t/home/tester/source/repos/dotfiles\nhome\t%2\t2\t0\t0\tshell\t\tzsh\t/home/tester\n"), nil
 	}))
 
 	panes, err := client.ListAllPanes(context.Background())
@@ -520,7 +520,7 @@ func TestClientListAllPanesParsesRows(t *testing.T) {
 	}
 
 	want := []Pane{
-		{ID: "%1", SessionName: "dotfiles", WindowIndex: 0, PaneIndex: 1, Title: "server", Command: "go", Path: "/home/tester/source/repos/dotfiles", Active: true},
+		{ID: "%1", SessionName: "dotfiles", WindowIndex: 0, PaneIndex: 1, Title: "server", AttentionState: "busy", Command: "go", Path: "/home/tester/source/repos/dotfiles", Active: true},
 		{ID: "%2", SessionName: "home", WindowIndex: 2, PaneIndex: 0, Title: "shell", Command: "zsh", Path: "/home/tester", Active: false},
 	}
 	if !reflect.DeepEqual(panes, want) {

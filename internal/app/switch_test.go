@@ -189,10 +189,45 @@ func TestSwitchCommandSupportsSidebarUI(t *testing.T) {
 		t.Fatalf("runner bindings = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Entries, []intfzf.Entry{
-		{Label: "    app \x1b[2m/tmp/app\x1b[0m", Value: "/tmp/app"},
+		{Label: "      app \x1b[2m/tmp/app\x1b[0m", Value: "/tmp/app"},
 		{Label: "  \x1b[1m\x1b[36mSettings\x1b[0m  \x1b[2mmanage pinned directories\x1b[0m", Value: switchSettingsSentinel},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
+	}
+}
+
+func TestSwitchCommandSidebarRowsIncludeAttentionBadge(t *testing.T) {
+	t.Parallel()
+
+	var gotRunnerOptions intfzf.Options
+	cmd := &switchCommand{
+		discover: func(candidates.Inputs) ([]string, error) {
+			return []string{"/tmp/app"}, nil
+		},
+		pinStore: func() (switchPinStore, error) { return &stubSwitchPinStore{}, nil },
+		runner: switchRunnerFunc(func(options intfzf.Options) (intfzf.Result, error) {
+			gotRunnerOptions = options
+			return intfzf.Result{}, nil
+		}),
+		sessions: &capturingSwitchSessionExecutor{exists: map[string]bool{"tmp-app": true}},
+		inventory: &stubPreviewInventory{panes: []corepreview.Pane{{
+			SessionName:    "tmp-app",
+			Title:          "server",
+			AttentionState: attentionStateBusy,
+		}}},
+		executable: func() (string, error) { return "/tmp/projmux", nil },
+		identity:   stubSwitchIdentityResolver{name: "tmp-app"},
+		validate:   func(string) error { return nil },
+		homeDir:    func() (string, error) { return "/home/tester", nil },
+		workingDir: func() (string, error) { return "/tmp", nil },
+	}
+
+	if err := cmd.Run([]string{"--ui=sidebar"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if got, want := gotRunnerOptions.Entries[0].Label, "\x1b[33m●\x1b[0m     \x1b[1m\x1b[32mapp\x1b[0m \x1b[2m/tmp/app\x1b[0m"; got != want {
+		t.Fatalf("runner entry = %q, want %q", got, want)
 	}
 }
 
@@ -380,12 +415,12 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 		t.Fatalf("runner candidates = %q, want %q", got, wantCandidates)
 	}
 	wantEntries := []intfzf.Entry{
-		{Label: "    home \x1b[2m~\x1b[0m", Value: fixture.path("home")},
-		{Label: "  \x1b[33m*\x1b[0m app \x1b[2m" + fixture.path("pins/app") + "\x1b[0m", Value: fixture.path("pins/app")},
-		{Label: "    dotfiles \x1b[2m~/dotfiles\x1b[0m", Value: fixture.path("home/dotfiles")},
-		{Label: "    repo-a \x1b[2m~rp/repo-a\x1b[0m", Value: fixture.path("rp/repo-a")},
-		{Label: "    work-a \x1b[2m" + fixture.path("managed/work-a") + "\x1b[0m", Value: fixture.path("managed/work-a")},
-		{Label: "    work-b \x1b[2m" + fixture.path("managed/work-b") + "\x1b[0m", Value: fixture.path("managed/work-b")},
+		{Label: "      home \x1b[2m~\x1b[0m", Value: fixture.path("home")},
+		{Label: "    \x1b[33m*\x1b[0m app \x1b[2m" + fixture.path("pins/app") + "\x1b[0m", Value: fixture.path("pins/app")},
+		{Label: "      dotfiles \x1b[2m~/dotfiles\x1b[0m", Value: fixture.path("home/dotfiles")},
+		{Label: "      repo-a \x1b[2m~rp/repo-a\x1b[0m", Value: fixture.path("rp/repo-a")},
+		{Label: "      work-a \x1b[2m" + fixture.path("managed/work-a") + "\x1b[0m", Value: fixture.path("managed/work-a")},
+		{Label: "      work-b \x1b[2m" + fixture.path("managed/work-b") + "\x1b[0m", Value: fixture.path("managed/work-b")},
 		{Label: "  \x1b[1m\x1b[36mSettings\x1b[0m  \x1b[2mmanage pinned directories\x1b[0m", Value: switchSettingsSentinel},
 	}
 	if got := fakeRunner.last.Entries; !equalEntries(got, wantEntries) {
@@ -460,11 +495,11 @@ func TestNewSwitchCommandInfersRepoRootFromHomeSourceRepos(t *testing.T) {
 	}
 
 	wantEntries := []intfzf.Entry{
-		{Label: "    home \x1b[2m~\x1b[0m", Value: fixture.path("home")},
-		{Label: "    app \x1b[2m~rp/app\x1b[0m", Value: fixture.path("home/source/repos/app")},
-		{Label: "    dotfiles \x1b[2m~/dotfiles\x1b[0m", Value: fixture.path("home/dotfiles")},
-		{Label: "    lib \x1b[2m~rp/lib\x1b[0m", Value: fixture.path("home/source/repos/lib")},
-		{Label: "    repos \x1b[2m~rp\x1b[0m", Value: fixture.path("home/source/repos")},
+		{Label: "      home \x1b[2m~\x1b[0m", Value: fixture.path("home")},
+		{Label: "      app \x1b[2m~rp/app\x1b[0m", Value: fixture.path("home/source/repos/app")},
+		{Label: "      dotfiles \x1b[2m~/dotfiles\x1b[0m", Value: fixture.path("home/dotfiles")},
+		{Label: "      lib \x1b[2m~rp/lib\x1b[0m", Value: fixture.path("home/source/repos/lib")},
+		{Label: "      repos \x1b[2m~rp\x1b[0m", Value: fixture.path("home/source/repos")},
 		{Label: "  \x1b[1m\x1b[36mSettings\x1b[0m  \x1b[2mmanage pinned directories\x1b[0m", Value: switchSettingsSentinel},
 	}
 	if got := fakeRunner.last.Entries; !equalEntries(got, wantEntries) {
