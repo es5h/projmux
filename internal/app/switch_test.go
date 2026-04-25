@@ -434,6 +434,7 @@ func TestNewSwitchCommandInfersRepoRootFromHomeSourceRepos(t *testing.T) {
 	t.Setenv("HOME", fixture.path("home"))
 	t.Setenv("XDG_CONFIG_HOME", fixture.path("xdg-config"))
 	t.Setenv("XDG_STATE_HOME", fixture.path("xdg-state"))
+	t.Setenv(repoRootEnvVar, "")
 	t.Chdir(fixture.path("home/source/repos/app/nested"))
 
 	cmd := newSwitchCommand()
