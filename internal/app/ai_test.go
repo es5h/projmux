@@ -176,6 +176,9 @@ func TestAISplitCodexRunsNativeTmuxSplitAndStartsWatcher(t *testing.T) {
 	if !containsAICommandArgs(commands, "tmux", []string{"split-window", "-P", "-F", "#{pane_id}", "-h", "-t", "%7", "-c", work, "zsh", "-lc"}) {
 		t.Fatalf("commands = %#v, want native tmux split-window", commands)
 	}
+	if !containsAICommandArgs(commands, "tmux", []string{"select-layout", "-t", "%7", "even-horizontal"}) {
+		t.Fatalf("commands = %#v, want even horizontal layout after split", commands)
+	}
 	if !containsAICommandArgs(commands, "tmux", []string{"run-shell", "-b", "'/tmp/projmux' ai watch-title '%9'"}) {
 		t.Fatalf("commands = %#v, want codex watch-title run-shell", commands)
 	}
@@ -258,9 +261,26 @@ func TestAISplitShellUsesTmuxSplitWindow(t *testing.T) {
 	want := []recordedAICommand{
 		{name: "tmux", args: []string{"display-message", "ai split default: shell"}},
 		{name: "tmux", args: []string{"split-window", "-v", "-t", "%9", "-c", work, "zsh", "-l"}},
+		{name: "tmux", args: []string{"select-layout", "-t", "%9", "even-vertical"}},
 	}
 	if !reflect.DeepEqual(cmdRecorder(cmd).commands, want) {
 		t.Fatalf("commands = %#v, want %#v", cmdRecorder(cmd).commands, want)
+	}
+}
+
+func TestSplitLayoutForDirection(t *testing.T) {
+	tests := []struct {
+		direction string
+		want      string
+	}{
+		{direction: "right", want: "even-horizontal"},
+		{direction: "down", want: "even-vertical"},
+		{direction: "", want: "even-horizontal"},
+	}
+	for _, tt := range tests {
+		if got := splitLayoutForDirection(tt.direction); got != tt.want {
+			t.Fatalf("splitLayoutForDirection(%q) = %q, want %q", tt.direction, got, tt.want)
+		}
 	}
 }
 

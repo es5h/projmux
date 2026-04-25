@@ -544,6 +544,9 @@ func (c *aiCommand) runAgentSplit(mode, direction string) error {
 	if err != nil {
 		return err
 	}
+	if err := c.applySplitLayout(targetPane, direction); err != nil {
+		return err
+	}
 	if mode == aiModeCodex {
 		c.startAIWatchTitle(strings.TrimSpace(string(out)))
 	}
@@ -566,7 +569,26 @@ func (c *aiCommand) runShellSplit(direction string) error {
 		args = append(args, "-c", contextDir)
 	}
 	args = append(args, "zsh", "-l")
+	if err := c.run("tmux", args...); err != nil {
+		return err
+	}
+	return c.applySplitLayout(targetPane, direction)
+}
+
+func (c *aiCommand) applySplitLayout(targetPane, direction string) error {
+	args := []string{"select-layout"}
+	if strings.TrimSpace(targetPane) != "" {
+		args = append(args, "-t", targetPane)
+	}
+	args = append(args, splitLayoutForDirection(direction))
 	return c.run("tmux", args...)
+}
+
+func splitLayoutForDirection(direction string) string {
+	if direction == "down" {
+		return "even-vertical"
+	}
+	return "even-horizontal"
 }
 
 func (c *aiCommand) resolveContextDir() string {
