@@ -333,11 +333,24 @@ func TestAIStatusSetThinkingMarksPaneBusy(t *testing.T) {
 
 func TestAIStatusSetWaitingMarksPaneReplyAndNotifies(t *testing.T) {
 	home := t.TempDir()
+	work := filepath.Join(home, "projmux")
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	cmd := testAICommand(home)
 	cmd.now = func() time.Time { return time.Unix(1000, 0) }
 	cmd.readCommand = func(_ context.Context, name string, args ...string) ([]byte, error) {
 		if name == "command" && reflect.DeepEqual(args, []string{"-v", "notify-send"}) {
 			return []byte("/usr/bin/notify-send\n"), nil
+		}
+		if name == "git" {
+			switch {
+			case reflect.DeepEqual(args, []string{"-C", work, "rev-parse", "--is-inside-work-tree"}):
+				return []byte("true\n"), nil
+			case reflect.DeepEqual(args, []string{"-C", work, "symbolic-ref", "--quiet", "--short", "HEAD"}):
+				return []byte("main\n"), nil
+			}
+			return nil, os.ErrNotExist
 		}
 		if name != "tmux" {
 			return nil, os.ErrNotExist
@@ -354,7 +367,7 @@ func TestAIStatusSetWaitingMarksPaneReplyAndNotifies(t *testing.T) {
 		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#W"}):
 			return []byte("dev\n"), nil
 		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#{pane_current_path}"}):
-			return []byte(home + "\n"), nil
+			return []byte(work + "\n"), nil
 		}
 		return nil, os.ErrNotExist
 	}
@@ -374,6 +387,15 @@ func TestAIStatusSetWaitingMarksPaneReplyAndNotifies(t *testing.T) {
 	}
 	if !containsAICommand(commands, "notify-send") {
 		t.Fatalf("commands = %#v, want notify-send dispatch", commands)
+	}
+	if !containsAICommandArgs(commands, "notify-send", []string{
+		"--app-name=dotfiles.TmuxCodex",
+		"--icon=dialog-information",
+		"--urgency=critical",
+		"Codex 승인 필요 · approval needed",
+		"검토 대기: repo:dev · %2 · projmux/main",
+	}) {
+		t.Fatalf("commands = %#v, want enriched notify-send message", commands)
 	}
 	if !containsAICommandArg(commands, "@dotfiles_desktop_notified") {
 		t.Fatalf("commands = %#v, want notification record", commands)
@@ -514,6 +536,24 @@ func TestAIReplyTitleIgnoresProjmuxAttentionMarkers(t *testing.T) {
 		if isAIReplyTitle(title) {
 			t.Fatalf("isAIReplyTitle(%q) = true, want false for projmux marker", title)
 		}
+	}
+}
+
+func TestAINotificationMessageLabelsClaudeAndAvoidsRootProject(t *testing.T) {
+	if got, want := aiAgentDisplayName("Claude: waiting for input"), "Claude"; got != want {
+		t.Fatalf("aiAgentDisplayName = %q, want %q", got, want)
+	}
+	if got, want := displayAITopic("Claude: waiting for input"), "waiting for input"; got != want {
+		t.Fatalf("displayAITopic = %q, want %q", got, want)
+	}
+	if got := aiProjectName("/"); got != "" {
+		t.Fatalf("aiProjectName(/) = %q, want empty", got)
+	}
+	if got, want := aiSummaryForKind("input_required", "Claude", "waiting for input"), "Claude 입력 필요 · waiting for input"; got != want {
+		t.Fatalf("aiSummaryForKind = %q, want %q", got, want)
+	}
+	if got, want := aiNotificationBody("", "", "home", "dev", "%4"), "검토 대기: home:dev · %4"; got != want {
+		t.Fatalf("aiNotificationBody = %q, want %q", got, want)
 	}
 }
 

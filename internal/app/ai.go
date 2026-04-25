@@ -189,6 +189,7 @@ func (c *aiCommand) notifyAI(paneID string) error {
 	sessionName := c.readTrimmed("tmux", "display-message", "-p", "-t", paneID, "#S")
 	windowName := c.readTrimmed("tmux", "display-message", "-p", "-t", paneID, "#W")
 	panePath := c.readTrimmed("tmux", "display-message", "-p", "-t", paneID, "#{pane_current_path}")
+	agentName := aiAgentDisplayName(paneTitle)
 	cleanTitle := displayAITopic(paneTitle)
 	replyKind := aiReplyKindForTitle(paneTitle)
 	key := aiNotificationKey(replyKind, paneTitle)
@@ -197,8 +198,8 @@ func (c *aiCommand) notifyAI(paneID string) error {
 		return nil
 	}
 
-	summary := aiSummaryForKind(replyKind, cleanTitle)
-	body := aiNotificationBody(filepath.Base(defaultString(panePath, "/")), c.gitBranchForPath(panePath), sessionName, windowName)
+	summary := aiSummaryForKind(replyKind, agentName, cleanTitle)
+	body := aiNotificationBody(aiProjectName(panePath), c.gitBranchForPath(panePath), sessionName, windowName, paneID)
 	if err := c.dispatchAINotification(summary, body, aiUrgencyForKind(replyKind), "dotfiles.TmuxCodex", paneID, sessionName); err != nil {
 		return nil
 	}
@@ -1111,9 +1112,10 @@ func normalizeAITitle(title string) string {
 
 func displayAITopic(title string) string {
 	topic := trimAIStatePrefix(title)
-	topic = strings.TrimPrefix(topic, "codex:")
-	topic = strings.TrimPrefix(topic, "Codex:")
-	return topic
+	for _, prefix := range []string{"codex:", "Codex:", "claude:", "Claude:"} {
+		topic = strings.TrimPrefix(topic, prefix)
+	}
+	return strings.TrimSpace(topic)
 }
 
 func aiReplyKindForTitle(title string) string {
@@ -1132,7 +1134,19 @@ func aiReplyKindForTitle(title string) string {
 	}
 }
 
-func aiSummaryForKind(kind, topic string) string {
+func aiAgentDisplayName(title string) string {
+	normalized := normalizeAITitle(title)
+	switch {
+	case strings.HasPrefix(normalized, "claude:") || strings.Contains(normalized, "claude"):
+		return "Claude"
+	case strings.HasPrefix(normalized, "codex:") || strings.Contains(normalized, "codex"):
+		return "Codex"
+	default:
+		return "AI"
+	}
+}
+
+func aiSummaryForKind(kind, agentName, topic string) string {
 	summary := "응답 완료"
 	switch kind {
 	case "approval_required":
@@ -1143,6 +1157,9 @@ func aiSummaryForKind(kind, topic string) string {
 		summary = "확인 필요"
 	case "input_required":
 		summary = "입력 필요"
+	}
+	if strings.TrimSpace(agentName) != "" {
+		summary = strings.TrimSpace(agentName) + " " + summary
 	}
 	if strings.TrimSpace(topic) != "" {
 		summary += " · " + topic
@@ -1159,7 +1176,15 @@ func aiUrgencyForKind(kind string) string {
 	}
 }
 
-func aiNotificationBody(project, branch, sessionName, windowName string) string {
+func aiProjectName(path string) string {
+	project := filepath.Base(strings.TrimSpace(path))
+	if project == "." || project == string(filepath.Separator) {
+		return ""
+	}
+	return project
+}
+
+func aiNotificationBody(project, branch, sessionName, windowName, paneID string) string {
 	projectPart := ""
 	switch {
 	case project != "" && branch != "":
@@ -1171,15 +1196,25 @@ func aiNotificationBody(project, branch, sessionName, windowName string) string 
 	}
 	location := ""
 	if sessionName != "" || windowName != "" {
-		location = "tmux " + sessionName + ":" + windowName
+		location = sessionName + ":" + windowName
+	}
+	if paneID != "" {
+		if location != "" {
+			location += " · " + paneID
+		} else {
+			location = paneID
+		}
 	}
 	switch {
 	case projectPart != "" && location != "":
-		return projectPart + " · " + location
+		return "검토 대기: " + location + " · " + projectPart
 	case projectPart != "":
-		return projectPart
+		return "검토 대기: " + projectPart
 	default:
-		return location
+		if location != "" {
+			return "검토 대기: " + location
+		}
+		return ""
 	}
 }
 
