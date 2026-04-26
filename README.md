@@ -4,7 +4,7 @@ Project-aware tmux session management for people who live in terminals.
 
 `projmux` turns project directories into stable tmux sessions, gives you fast
 fzf-driven switching and previews, and can install the tmux bindings it needs
-without depending on a private dotfiles layout.
+without depending on any dotfiles repository or private shell setup.
 
 [한국어 README](README-ko.md)
 
@@ -54,6 +54,10 @@ projmux version
 projmux help
 ```
 
+That is enough to use the standalone app path. `projmux shell` generates its own
+tmux config and does not require an existing `.tmux.conf` include, zsh framework,
+or dotfiles checkout.
+
 For development, use:
 
 ```sh
@@ -77,6 +81,9 @@ This writes `~/.config/projmux/tmux.conf` and starts:
 ```sh
 tmux -L projmux -f ~/.config/projmux/tmux.conf new-session -A -s main
 ```
+
+This is the recommended dotfiles-free entrypoint: projmux owns this tmux server,
+its generated config, status bar, and popup bindings.
 
 Inside that app session, the left status badge shows the current project name,
 and the right status area shows the current path, kube segment, git segment, and
@@ -227,8 +234,10 @@ The generated normal tmux snippet lives at:
 `projmux` owns the portable session-management core: naming, discovery, pins,
 preview state, tmux orchestration, status segments, and generated tmux bindings.
 
-Your dotfiles should keep owning local policy: terminal emulator key dispatch,
-zsh startup decisions, machine-specific packages, and symlinks.
+Dotfiles are optional. If you have them, keep local policy there: terminal
+emulator key dispatch, zsh startup decisions, machine-specific packages, and
+symlinks. The application should remain installable and useful without knowing
+that such a repository exists.
 
 ## Development
 
