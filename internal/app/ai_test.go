@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -409,7 +410,7 @@ func TestAIStatusSetWaitingMarksPaneReplyAndNotifies(t *testing.T) {
 		"Notify",
 		"projmux.TmuxCodex",
 		filepath.Join(home, ".local", "share", "projmux", "icons", "codex.svg"),
-		"open",
+		"default",
 		"Open pane",
 		"dbus-monitor",
 		"ActionInvoked",
@@ -1012,13 +1013,20 @@ func testAICommand(home string) *aiCommand {
 	}
 	cmd.now = func() time.Time { return time.Unix(0, 0) }
 	cmd.sleep = func(time.Duration) {}
+	aiRecordersMu.Lock()
 	aiRecorders[cmd] = recorder
+	aiRecordersMu.Unlock()
 	return cmd
 }
 
-var aiRecorders = map[*aiCommand]*aiCommandRecorder{}
+var (
+	aiRecordersMu sync.Mutex
+	aiRecorders   = map[*aiCommand]*aiCommandRecorder{}
+)
 
 func cmdRecorder(cmd *aiCommand) *aiCommandRecorder {
+	aiRecordersMu.Lock()
+	defer aiRecordersMu.Unlock()
 	return aiRecorders[cmd]
 }
 
