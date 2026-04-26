@@ -55,6 +55,9 @@ func TestSettingsHubSetsAIDefaultMode(t *testing.T) {
 	if !hasEntryValue(rootOptions.Entries, settingsSectionProject) {
 		t.Fatalf("root settings entries = %#v, want project picker section", rootOptions.Entries)
 	}
+	if !hasEntryValue(rootOptions.Entries, settingsSectionInfo) {
+		t.Fatalf("root settings entries = %#v, want info section", rootOptions.Entries)
+	}
 	if got, want := aiOptions.UI, "settings-ai"; got != want {
 		t.Fatalf("AI settings UI = %q, want %q", got, want)
 	}
@@ -108,6 +111,63 @@ func TestSettingsHubRunsProjectPickerActions(t *testing.T) {
 	}
 	if got, want := stdout.String(), "pinned: /home/tester/source/repos/app\n"; got != want {
 		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+}
+
+func TestSettingsHubShowsInfoSection(t *testing.T) {
+	t.Parallel()
+
+	var calls int
+	var infoOptions intfzf.Options
+	cmd := &settingsCommand{
+		ai:       testAICommand(t.TempDir()),
+		switcher: testSettingsSwitchCommand(t, &stubSwitchPinStore{}),
+		runner: switchRunnerFunc(func(options intfzf.Options) (intfzf.Result, error) {
+			calls++
+			switch calls {
+			case 1:
+				return intfzf.Result{Key: "enter", Value: settingsSectionInfo}, nil
+			case 2:
+				infoOptions = options
+				return intfzf.Result{Key: "enter", Value: settingsNoopValue}, nil
+			case 3:
+				if got, want := options.UI, "settings-info"; got != want {
+					t.Fatalf("settings info UI after noop = %q, want %q", got, want)
+				}
+				return intfzf.Result{Key: "enter", Value: settingsBackValue}, nil
+			case 4:
+				return intfzf.Result{}, nil
+			default:
+				t.Fatalf("unexpected settings picker call %d", calls)
+				return intfzf.Result{}, nil
+			}
+		}),
+	}
+
+	if err := cmd.Run(nil, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got, want := infoOptions.UI, "settings-info"; got != want {
+		t.Fatalf("settings info UI = %q, want %q", got, want)
+	}
+	if got, want := infoOptions.Prompt, "Settings > Info > "; got != want {
+		t.Fatalf("settings info prompt = %q, want %q", got, want)
+	}
+	if !hasEntryValue(infoOptions.Entries, settingsBackValue) {
+		t.Fatalf("settings info entries = %#v, want back entry", infoOptions.Entries)
+	}
+	for _, want := range []string{
+		"projmux dev",
+		"https://github.com/es5h/projmux",
+		"go install github.com/es5h/projmux/cmd/projmux@latest",
+		"User0 through User10",
+		"Ghostty",
+		"Windows Terminal",
+		"Rename window",
+	} {
+		if !hasEntryLabelContaining(infoOptions.Entries, want) {
+			t.Fatalf("settings info entries = %#v, want label containing %q", infoOptions.Entries, want)
+		}
 	}
 }
 
@@ -287,6 +347,15 @@ func testSettingsSwitchCommandWithHome(t *testing.T, home string, store *stubSwi
 func hasEntryValue(entries []intfzf.Entry, value string) bool {
 	for _, entry := range entries {
 		if entry.Value == value {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEntryLabelContaining(entries []intfzf.Entry, value string) bool {
+	for _, entry := range entries {
+		if strings.Contains(entry.Label, value) {
 			return true
 		}
 	}

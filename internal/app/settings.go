@@ -8,6 +8,7 @@ import (
 
 	intfzf "github.com/es5h/projmux/internal/ui/fzf"
 	intrender "github.com/es5h/projmux/internal/ui/render"
+	"github.com/es5h/projmux/internal/version"
 )
 
 type settingsCommand struct {
@@ -23,6 +24,7 @@ const (
 	settingsNoopValue          = "__settings_noop__"
 	settingsSectionAI          = "section:ai"
 	settingsSectionProject     = "section:project-picker"
+	settingsSectionInfo        = "section:info"
 	settingsActionPrefixAI     = "ai:"
 	settingsActionPrefixSwitch = "switch:"
 	settingsProjectAdd         = "project:add"
@@ -98,6 +100,9 @@ func (c *settingsCommand) runSection(section string, stdout, stderr io.Writer) e
 		if action == settingsBackValue {
 			return nil
 		}
+		if action == settingsNoopValue {
+			continue
+		}
 		if err := c.execute(action, stdout, stderr); err != nil {
 			return err
 		}
@@ -125,6 +130,10 @@ func (c *settingsCommand) rootEntries() []intfzf.Entry {
 			Label: "\x1b[36mProject Picker\x1b[0m   \x1b[90mpinned projects and sidebar entries\x1b[0m",
 			Value: settingsSectionProject,
 		},
+		{
+			Label: "\x1b[34mInfo\x1b[0m             \x1b[90mversion, repository, keybinding guide\x1b[0m",
+			Value: settingsSectionInfo,
+		},
 	}
 }
 
@@ -147,6 +156,16 @@ func (c *settingsCommand) sectionOptions(section string) (intfzf.Options, error)
 			Prompt:     "Settings > Project Picker > ",
 			Header:     "Add projects to the picker and manage pinned projects",
 			Footer:     projmuxFooter("Enter: apply  |  Back row: parent  |  Esc/Alt+5/Ctrl+Alt+S: close"),
+			ExpectKeys: []string{"enter"},
+			Bindings:   settingsCloseBindings(),
+		}, nil
+	case settingsSectionInfo:
+		return intfzf.Options{
+			UI:         "settings-info",
+			Entries:    settingsInfoEntries(),
+			Prompt:     "Settings > Info > ",
+			Header:     "App information and terminal keybinding guide",
+			Footer:     projmuxFooter("Back row: parent  |  Esc/Alt+5/Ctrl+Alt+S: close"),
 			ExpectKeys: []string{"enter"},
 			Bindings:   settingsCloseBindings(),
 		}, nil
@@ -376,6 +395,40 @@ func (c *settingsCommand) aiEntries() []intfzf.Entry {
 		})
 	}
 	return entries
+}
+
+func settingsInfoEntries() []intfzf.Entry {
+	return []intfzf.Entry{
+		settingsBackEntry(),
+		{
+			Label: "Version              projmux " + version.String(),
+			Value: settingsNoopValue,
+		},
+		{
+			Label: "GitHub               https://github.com/es5h/projmux",
+			Value: settingsNoopValue,
+		},
+		{
+			Label: "Update               go install github.com/es5h/projmux/cmd/projmux@latest",
+			Value: settingsNoopValue,
+		},
+		{
+			Label: "Keybinding layer     terminal sends CSI-u keys; tmux maps User0 through User10",
+			Value: settingsNoopValue,
+		},
+		{
+			Label: "Ghostty              bind keys to send ESC [ 9001 u through ESC [ 9011 u",
+			Value: settingsNoopValue,
+		},
+		{
+			Label: "Windows Terminal     use sendInput for the same CSI-u escape sequences",
+			Value: settingsNoopValue,
+		},
+		{
+			Label: "Rename window        tmux User10 sends rename-window; Ghostty can map ctrl+m if safe",
+			Value: settingsNoopValue,
+		},
+	}
 }
 
 func (c *settingsCommand) execute(value string, stdout, stderr io.Writer) error {
