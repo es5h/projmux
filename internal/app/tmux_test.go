@@ -224,7 +224,7 @@ func TestAppRunTmuxPopupToggleOpensStandaloneSidebar(t *testing.T) {
 		"-e", "TMUX_SESSIONIZER_CONTEXT_SESSION=work",
 		"-x", "0",
 		"-y", "0",
-		"-w", "40",
+		"-w", "56",
 		"-h", "50",
 	}
 	if got.name != "tmux" || len(got.args) < len(wantPrefix)+1 || !reflect.DeepEqual(got.args[:len(wantPrefix)], wantPrefix) {

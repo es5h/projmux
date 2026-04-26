@@ -540,7 +540,7 @@ func buildPopupToggle(mode tmuxPopupToggleMode, binaryPath, marker string, ctx t
 		env["TMUX_SESSIONIZER_CONTEXT_PANE"] = ctx.OriginPane
 		commandArgs = []string{"switch", "--ui=popup"}
 	case "sessionizer-sidebar":
-		options.Width = popupSize(ctx.ClientWidth, 20, 36)
+		options.Width = popupSize(ctx.ClientWidth, 20, 56)
 		options.Height = popupSize(ctx.ClientHeight, 100, 20)
 		options.X = "0"
 		options.Y = "0"
