@@ -95,8 +95,12 @@ func writeWindows(builder *strings.Builder, model preview.PopupReadModel) {
 	}
 
 	selectedWindow := strings.TrimSpace(model.SelectedWindowIndex)
+	aggregationPanes := model.AllPanes
+	if len(aggregationPanes) == 0 {
+		aggregationPanes = model.Panes
+	}
 	for _, window := range model.Windows {
-		line := formatWindowSummary(window)
+		line := formatWindowSummary(window, aggregationPanes)
 		if window.Index == selectedWindow {
 			builder.WriteString(highlightPreviewLine(line))
 			builder.WriteString("\n")
@@ -133,12 +137,16 @@ func selectionMarker(selected bool) string {
 	return " "
 }
 
-func formatWindowSummary(window preview.Window) string {
+func formatWindowSummary(window preview.Window, panes []preview.Pane) string {
 	name := sanitizeCell(window.Name)
 	if name == "" {
 		name = "-"
 	}
-	return "[" + sanitizeCell(window.Index) + "] " + padRight(truncateText(name, 18), 18) + " " + padLeft(strconv.Itoa(window.PaneCount), 2) + "p"
+	prefix := formatWindowAttentionPrefix(windowAttentionRank(window.Index, panes))
+	if prefix != "" {
+		prefix += " "
+	}
+	return prefix + "[" + sanitizeCell(window.Index) + "] " + padRight(truncateText(name, 18), 18) + " " + padLeft(strconv.Itoa(window.PaneCount), 2) + "p"
 }
 
 func formatPaneSummary(pane preview.Pane) string {
@@ -178,6 +186,48 @@ func formatPaneStatus(pane preview.Pane) string {
 		parts = append(parts, "clears-on-focus="+humanBoolOption(armed))
 	}
 	return strings.Join(parts, " ")
+}
+
+func windowAttentionRank(windowIndex string, panes []preview.Pane) int {
+	rank := 0
+	for _, pane := range panes {
+		if strings.TrimSpace(pane.WindowIndex) != windowIndex {
+			continue
+		}
+		if paneAttentionRank(pane) == 2 {
+			return 2
+		}
+		if paneAttentionRank(pane) == 1 {
+			rank = 1
+		}
+	}
+	return rank
+}
+
+func formatWindowAttentionPrefix(rank int) string {
+	switch rank {
+	case 2:
+		return ansiYellow + "●" + ansiReset
+	case 1:
+		return ansiGreen + "●" + ansiReset
+	default:
+		return ""
+	}
+}
+
+func paneAttentionRank(pane preview.Pane) int {
+	if strings.TrimSpace(pane.AttentionState) == "busy" || strings.TrimSpace(pane.AIState) == "thinking" || hasBraillePrefix(pane.Title) {
+		return 2
+	}
+	if strings.TrimSpace(pane.AttentionState) == "reply" || strings.TrimSpace(pane.AIState) == "waiting" || hasAttentionTitlePrefix(pane.Title) {
+		return 1
+	}
+	return 0
+}
+
+func hasAttentionTitlePrefix(title string) bool {
+	title = strings.TrimLeft(title, " \t")
+	return strings.HasPrefix(title, "✳") || strings.HasPrefix(title, "✔")
 }
 
 func humanAttentionState(state string) string {

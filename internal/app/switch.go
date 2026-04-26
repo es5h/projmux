@@ -1200,11 +1200,6 @@ func (c *switchCommand) switchPickerSurface(plan switchPlan) (string, []string, 
 		if pos := switchSidebarInitialPos(plan); pos > 0 {
 			bindings = append(bindings, fmt.Sprintf("start:pos(%d)", pos))
 		}
-		sidebarFocus, err := inttmux.BuildSwitchSidebarFocusCommand(binaryPath)
-		if err != nil {
-			return "", nil, fmt.Errorf("build switch sidebar-focus command: %w", err)
-		}
-		bindings = append(bindings, "focus:execute-silent("+sidebarFocus+")")
 		return previewCommand, bindings, nil
 	}
 

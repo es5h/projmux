@@ -135,7 +135,11 @@ func formatSidebarWindowSummary(window corepreview.Window, panes []corepreview.P
 		titles = append(titles, window.Index)
 	}
 
-	return fmt.Sprintf("[%s] %s", sanitizeCell(window.Index), strings.Join(titles, " | "))
+	prefix := formatWindowAttentionPrefix(windowAttentionRank(window.Index, panes))
+	if prefix != "" {
+		prefix += " "
+	}
+	return fmt.Sprintf("%s[%s] %s", prefix, sanitizeCell(window.Index), strings.Join(titles, " | "))
 }
 
 func sidebarWindowTitles(windowIndex string, panes []corepreview.Pane) []string {
@@ -187,17 +191,10 @@ func formatSidebarPaneTitle(pane corepreview.Pane) string {
 }
 
 func sidebarPaneBadge(pane corepreview.Pane) string {
-	switch strings.TrimSpace(pane.AttentionState) {
-	case "busy":
+	switch paneAttentionRank(pane) {
+	case 2:
 		return ansiYellow + "●" + ansiReset
-	case "reply":
-		return ansiGreen + "●" + ansiReset
-	}
-
-	switch strings.TrimSpace(pane.AIState) {
-	case "thinking":
-		return ansiYellow + "●" + ansiReset
-	case "waiting":
+	case 1:
 		return ansiGreen + "●" + ansiReset
 	default:
 		return ""

@@ -11,6 +11,7 @@ type PopupReadModel struct {
 	SelectedWindowIndex string
 	SelectedPaneIndex   string
 	Windows             []Window
+	AllPanes            []Pane
 	Panes               []Pane
 	PaneSnapshot        string
 }
@@ -35,6 +36,7 @@ func BuildPopupReadModel(inputs PopupReadModelInputs) PopupReadModel {
 		WindowCount:    len(windows),
 		TotalPaneCount: len(allPanes),
 		Windows:        windows,
+		AllPanes:       allPanes,
 	}
 	if len(windows) == 0 {
 		return model
