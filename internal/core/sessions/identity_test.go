@@ -18,19 +18,14 @@ func TestSessionNameParity(t *testing.T) {
 			want: "home",
 		},
 		{
-			name: "dotfiles directory keeps dedicated session name",
-			dir:  "/home/es5h/dotfiles",
-			want: "dotfiles",
-		},
-		{
 			name: "home trailing slash keeps shell parity",
 			dir:  "/home/es5h/",
 			want: "home-es5h",
 		},
 		{
-			name: "dotfiles trailing slash keeps shell parity",
-			dir:  "/home/es5h/dotfiles/",
-			want: "es5h-dotfiles",
+			name: "home child directory uses parent and base names",
+			dir:  "/home/es5h/workspace",
+			want: "es5h-workspace",
 		},
 		{
 			name: "project sessions include parent and base directory",

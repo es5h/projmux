@@ -25,7 +25,7 @@ func TestAttentionToggleMarksPlainPane(t *testing.T) {
 
 	want := []attentionCall{
 		{name: "tmux", args: []string{"display-message", "-p", "-t", "%1", "#{pane_title}"}},
-		{name: "tmux", args: []string{"set-option", "-p", "-t", "%1", "@dotfiles_attention_state", "reply"}},
+		{name: "tmux", args: []string{"set-option", "-p", "-t", "%1", "@projmux_attention_state", "reply"}},
 		{name: "tmux", args: []string{"select-pane", "-T", "✳ server", "-t", "%1"}},
 		{name: "tmux", args: []string{"display-message", "-t", "%1", "attention: needs reply"}},
 	}
@@ -50,7 +50,7 @@ func TestAttentionToggleClearsMarkedPane(t *testing.T) {
 
 	want := []attentionCall{
 		{name: "tmux", args: []string{"display-message", "-p", "-t", "%2", "#{pane_title}"}},
-		{name: "tmux", args: []string{"set-option", "-p", "-u", "-t", "%2", "@dotfiles_attention_state"}},
+		{name: "tmux", args: []string{"set-option", "-p", "-u", "-t", "%2", "@projmux_attention_state"}},
 		{name: "tmux", args: []string{"select-pane", "-T", "worker", "-t", "%2"}},
 		{name: "tmux", args: []string{"display-message", "-t", "%2", "attention: cleared"}},
 	}
@@ -74,8 +74,8 @@ func TestAttentionClearAcksAndStripsPrefix(t *testing.T) {
 	}
 
 	want := []attentionCall{
-		{name: "tmux", args: []string{"set-option", "-p", "-u", "-t", "%3", "@dotfiles_attention_state"}},
-		{name: "tmux", args: []string{"set-option", "-p", "-t", "%3", "@dotfiles_attention_ack", "1"}},
+		{name: "tmux", args: []string{"set-option", "-p", "-u", "-t", "%3", "@projmux_attention_state"}},
+		{name: "tmux", args: []string{"set-option", "-p", "-t", "%3", "@projmux_attention_ack", "1"}},
 		{name: "tmux", args: []string{"display-message", "-p", "-t", "%3", "#{pane_title}"}},
 		{name: "tmux", args: []string{"select-pane", "-T", "done", "-t", "%3"}},
 	}
@@ -89,7 +89,7 @@ func TestAttentionWindowPrefersBusyBadge(t *testing.T) {
 
 	runner := &recordingAttentionRunner{
 		outputs: map[string][]byte{
-			"tmux list-panes -t @1 -F #{pane_title}\t#{@dotfiles_attention_state}": []byte("plain\treply\n⠋ working\t\n"),
+			"tmux list-panes -t @1 -F #{pane_title}\t#{@projmux_attention_state}": []byte("plain\treply\n⠋ working\t\n"),
 		},
 	}
 	cmd := &attentionCommand{runner: runner}
@@ -108,7 +108,7 @@ func TestAttentionWindowShowsReplyBadge(t *testing.T) {
 
 	runner := &recordingAttentionRunner{
 		outputs: map[string][]byte{
-			"tmux list-panes -t @2 -F #{pane_title}\t#{@dotfiles_attention_state}": []byte("plain\t\n✳ ready\t\n"),
+			"tmux list-panes -t @2 -F #{pane_title}\t#{@projmux_attention_state}": []byte("plain\t\n✳ ready\t\n"),
 		},
 	}
 	cmd := &attentionCommand{runner: runner}

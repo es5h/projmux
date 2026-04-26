@@ -62,14 +62,14 @@ func TestClientCurrentSessionNameTrimsOutput(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("dotfiles\n"), nil
+		return []byte("workspace\n"), nil
 	}))
 
 	sessionName, err := client.CurrentSessionName(context.Background())
 	if err != nil {
 		t.Fatalf("CurrentSessionName returned error: %v", err)
 	}
-	if sessionName != "dotfiles" {
+	if sessionName != "workspace" {
 		t.Fatalf("unexpected session name %q", sessionName)
 	}
 }
@@ -176,7 +176,7 @@ func TestClientRecentSessionsRejectsInvalidActivity(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("oops\tdotfiles\t1\t2"), nil
+		return []byte("oops\tworkspace\t1\t2"), nil
 	}))
 
 	_, err := client.RecentSessions(context.Background())
@@ -375,7 +375,7 @@ func TestClientRecentSessionSummariesIncludeAttachedPaneCountAndPath(t *testing.
 			}
 			return []byte("10\tstale\t0\t1\n35\tfresh\t1\t3\n"), nil
 		case 2:
-			if got, want := args, []string{"list-panes", "-a", "-F", "#{session_name}\t#{pane_id}\t#{window_index}\t#{pane_index}\t#{?pane_active,1,0}\t#{pane_title}\t#{@dotfiles_attention_state}\t#{pane_current_command}\t#{pane_current_path}"}; !reflect.DeepEqual(got, want) {
+			if got, want := args, []string{"list-panes", "-a", "-F", "#{session_name}\t#{pane_id}\t#{window_index}\t#{pane_index}\t#{?pane_active,1,0}\t#{pane_title}\t#{@projmux_attention_state}\t#{pane_current_command}\t#{pane_current_path}"}; !reflect.DeepEqual(got, want) {
 				t.Fatalf("list-panes args = %#v, want %#v", got, want)
 			}
 			return []byte(
@@ -431,7 +431,7 @@ func TestClientListSessionWindowsParsesRows(t *testing.T) {
 		return []byte("0\t1\tshell\t1\t/home/tester\n2\t0\tdev\t2\t/home/tester/source/repos/dev\n"), nil
 	}))
 
-	windows, err := client.ListSessionWindows(context.Background(), "dotfiles")
+	windows, err := client.ListSessionWindows(context.Background(), "workspace")
 	if err != nil {
 		t.Fatalf("ListSessionWindows returned error: %v", err)
 	}
@@ -466,7 +466,7 @@ func TestClientListSessionWindowsRejectsMalformedRows(t *testing.T) {
 		return []byte("0"), nil
 	}))
 
-	_, err := client.ListSessionWindows(context.Background(), "dotfiles")
+	_, err := client.ListSessionWindows(context.Background(), "workspace")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -482,7 +482,7 @@ func TestClientListSessionWindowsRejectsInvalidWindowIndex(t *testing.T) {
 		return []byte("oops\t1\tshell\t1\t/home/tester"), nil
 	}))
 
-	_, err := client.ListSessionWindows(context.Background(), "dotfiles")
+	_, err := client.ListSessionWindows(context.Background(), "workspace")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -498,7 +498,7 @@ func TestClientListSessionWindowsRejectsInvalidWindowPaneCount(t *testing.T) {
 		return []byte("0\t1\tshell\toops\t/home/tester"), nil
 	}))
 
-	_, err := client.ListSessionWindows(context.Background(), "dotfiles")
+	_, err := client.ListSessionWindows(context.Background(), "workspace")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -511,7 +511,7 @@ func TestClientListAllPanesParsesRows(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("dotfiles\t%1\t0\t1\t1\tserver\tbusy\tgo\t/home/tester/source/repos/dotfiles\nhome\t%2\t2\t0\t0\tshell\t\tzsh\t/home/tester\n"), nil
+		return []byte("workspace\t%1\t0\t1\t1\tserver\tbusy\tgo\t/home/tester/source/repos/workspace\nhome\t%2\t2\t0\t0\tshell\t\tzsh\t/home/tester\n"), nil
 	}))
 
 	panes, err := client.ListAllPanes(context.Background())
@@ -520,7 +520,7 @@ func TestClientListAllPanesParsesRows(t *testing.T) {
 	}
 
 	want := []Pane{
-		{ID: "%1", SessionName: "dotfiles", WindowIndex: 0, PaneIndex: 1, Title: "server", AttentionState: "busy", Command: "go", Path: "/home/tester/source/repos/dotfiles", Active: true},
+		{ID: "%1", SessionName: "workspace", WindowIndex: 0, PaneIndex: 1, Title: "server", AttentionState: "busy", Command: "go", Path: "/home/tester/source/repos/workspace", Active: true},
 		{ID: "%2", SessionName: "home", WindowIndex: 2, PaneIndex: 0, Title: "shell", Command: "zsh", Path: "/home/tester", Active: false},
 	}
 	if !reflect.DeepEqual(panes, want) {
@@ -548,7 +548,7 @@ func TestClientListAllPanesRejectsInvalidPaneIndex(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("dotfiles\t%1\t0\toops\t1\tserver\tgo\t/repo"), nil
+		return []byte("workspace\t%1\t0\toops\t1\tserver\tgo\t/repo"), nil
 	}))
 
 	_, err := client.ListAllPanes(context.Background())
@@ -564,7 +564,7 @@ func TestClientListAllPanesRejectsInvalidActiveFlag(t *testing.T) {
 	t.Parallel()
 
 	client := NewClient(staticRunner(func(context.Context, string, ...string) ([]byte, error) {
-		return []byte("dotfiles\t%1\t0\t1\tmaybe\tserver\tgo\t/repo"), nil
+		return []byte("workspace\t%1\t0\t1\tmaybe\tserver\tgo\t/repo"), nil
 	}))
 
 	_, err := client.ListAllPanes(context.Background())
@@ -604,7 +604,7 @@ func TestClientListWindowPanesParsesRows(t *testing.T) {
 	}
 	client := NewClient(runner)
 
-	panes, err := client.ListWindowPanes(context.Background(), "dotfiles", 2)
+	panes, err := client.ListWindowPanes(context.Background(), "workspace", 2)
 	if err != nil {
 		t.Fatalf("ListWindowPanes returned error: %v", err)
 	}
@@ -618,7 +618,7 @@ func TestClientListWindowPanesParsesRows(t *testing.T) {
 	}
 
 	wantCalls := []commandCall{
-		{name: "tmux", args: []string{"list-panes", "-t", "dotfiles:2", "-F", "#{pane_index}\t#{?pane_active,1,0}"}},
+		{name: "tmux", args: []string{"list-panes", "-t", "workspace:2", "-F", "#{pane_index}\t#{?pane_active,1,0}"}},
 	}
 	if !reflect.DeepEqual(runner.calls, wantCalls) {
 		t.Fatalf("unexpected calls %#v", runner.calls)
@@ -633,7 +633,7 @@ func TestClientListWindowPanesRejectsInvalidWindowIndexArgument(t *testing.T) {
 		return nil, nil
 	}))
 
-	_, err := client.ListWindowPanes(context.Background(), "dotfiles", -1)
+	_, err := client.ListWindowPanes(context.Background(), "workspace", -1)
 	if !errors.Is(err, errWindowIndexInvalid) {
 		t.Fatalf("ListWindowPanes error = %v, want %v", err, errWindowIndexInvalid)
 	}
@@ -646,7 +646,7 @@ func TestClientListWindowPanesRejectsInvalidPaneIndex(t *testing.T) {
 		return []byte("oops\t1"), nil
 	}))
 
-	_, err := client.ListWindowPanes(context.Background(), "dotfiles", 2)
+	_, err := client.ListWindowPanes(context.Background(), "workspace", 2)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -667,13 +667,13 @@ func TestClientEnsureSessionCreatesMissingSession(t *testing.T) {
 	}
 	client := NewClient(runner)
 
-	if err := client.EnsureSession(context.Background(), "dotfiles", "/tmp/projmux"); err != nil {
+	if err := client.EnsureSession(context.Background(), "workspace", "/tmp/projmux"); err != nil {
 		t.Fatalf("EnsureSession returned error: %v", err)
 	}
 
 	want := []commandCall{
-		{name: "tmux", args: []string{"has-session", "-t", "dotfiles"}},
-		{name: "tmux", args: []string{"new-session", "-d", "-s", "dotfiles", "-c", "/tmp/projmux"}},
+		{name: "tmux", args: []string{"has-session", "-t", "workspace"}},
+		{name: "tmux", args: []string{"new-session", "-d", "-s", "workspace", "-c", "/tmp/projmux"}},
 	}
 	if !reflect.DeepEqual(runner.calls, want) {
 		t.Fatalf("unexpected calls %#v", runner.calls)
@@ -689,12 +689,12 @@ func TestClientEnsureSessionSkipsCreateWhenSessionExists(t *testing.T) {
 	}
 	client := NewClient(runner)
 
-	if err := client.EnsureSession(context.Background(), "dotfiles", "/tmp/projmux"); err != nil {
+	if err := client.EnsureSession(context.Background(), "workspace", "/tmp/projmux"); err != nil {
 		t.Fatalf("EnsureSession returned error: %v", err)
 	}
 
 	want := []commandCall{
-		{name: "tmux", args: []string{"has-session", "-t", "dotfiles"}},
+		{name: "tmux", args: []string{"has-session", "-t", "workspace"}},
 	}
 	if !reflect.DeepEqual(runner.calls, want) {
 		t.Fatalf("unexpected calls %#v", runner.calls)
@@ -719,7 +719,7 @@ func TestClientCreateEphemeralSessionCreatesAndMarksSession(t *testing.T) {
 
 	wantCalls := []commandCall{
 		{name: "tmux", args: []string{"new-session", "-d", "-s", "scratch-20260423-123456", "-c", "/tmp/projmux"}},
-		{name: "tmux", args: []string{"set-option", "-t", "scratch-20260423-123456", "-q", "@dotfiles_ephemeral", "1"}},
+		{name: "tmux", args: []string{"set-option", "-t", "scratch-20260423-123456", "-q", "@projmux_ephemeral", "1"}},
 	}
 	if !reflect.DeepEqual(runner.calls, wantCalls) {
 		t.Fatalf("CreateEphemeralSession() calls = %#v, want %#v", runner.calls, wantCalls)
@@ -750,7 +750,7 @@ func TestClientEnsureSessionWrapsLookupError(t *testing.T) {
 		return nil, errors.New("tmux failed")
 	}))
 
-	err := client.EnsureSession(context.Background(), "dotfiles", "/tmp/projmux")
+	err := client.EnsureSession(context.Background(), "workspace", "/tmp/projmux")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -768,7 +768,7 @@ func TestClientSessionExistsReturnsTrueWhenSessionExists(t *testing.T) {
 	}
 	client := NewClient(runner)
 
-	exists, err := client.SessionExists(context.Background(), "dotfiles")
+	exists, err := client.SessionExists(context.Background(), "workspace")
 	if err != nil {
 		t.Fatalf("SessionExists returned error: %v", err)
 	}
@@ -786,7 +786,7 @@ func TestClientSessionExistsReturnsFalseWhenSessionIsMissing(t *testing.T) {
 	}
 	client := NewClient(runner)
 
-	exists, err := client.SessionExists(context.Background(), "dotfiles")
+	exists, err := client.SessionExists(context.Background(), "workspace")
 	if err != nil {
 		t.Fatalf("SessionExists returned error: %v", err)
 	}
@@ -804,12 +804,12 @@ func TestClientOpenSessionSwitchesInsideTmux(t *testing.T) {
 	}
 	client := newClientWithEnv(runner, func(string) string { return "/tmp/tmux-sock" })
 
-	if err := client.OpenSession(context.Background(), "dotfiles"); err != nil {
+	if err := client.OpenSession(context.Background(), "workspace"); err != nil {
 		t.Fatalf("OpenSession returned error: %v", err)
 	}
 
 	want := []commandCall{
-		{name: "tmux", args: []string{"switch-client", "-t", "dotfiles"}},
+		{name: "tmux", args: []string{"switch-client", "-t", "workspace"}},
 	}
 	if !reflect.DeepEqual(runner.calls, want) {
 		t.Fatalf("unexpected calls %#v", runner.calls)
@@ -825,12 +825,12 @@ func TestClientOpenSessionAttachesOutsideTmux(t *testing.T) {
 	}
 	client := newClientWithEnv(runner, func(string) string { return "" })
 
-	if err := client.OpenSession(context.Background(), "dotfiles"); err != nil {
+	if err := client.OpenSession(context.Background(), "workspace"); err != nil {
 		t.Fatalf("OpenSession returned error: %v", err)
 	}
 
 	want := []commandCall{
-		{name: "tmux", args: []string{"attach-session", "-t", "dotfiles"}},
+		{name: "tmux", args: []string{"attach-session", "-t", "workspace"}},
 	}
 	if !reflect.DeepEqual(runner.calls, want) {
 		t.Fatalf("unexpected calls %#v", runner.calls)
@@ -860,12 +860,12 @@ func TestClientSwitchClientRunsTmuxSwitch(t *testing.T) {
 	}
 	client := NewClient(runner)
 
-	if err := client.SwitchClient(context.Background(), "dotfiles"); err != nil {
+	if err := client.SwitchClient(context.Background(), "workspace"); err != nil {
 		t.Fatalf("SwitchClient returned error: %v", err)
 	}
 
 	want := []commandCall{
-		{name: "tmux", args: []string{"switch-client", "-t", "dotfiles"}},
+		{name: "tmux", args: []string{"switch-client", "-t", "workspace"}},
 	}
 	if !reflect.DeepEqual(runner.calls, want) {
 		t.Fatalf("unexpected calls %#v", runner.calls)
@@ -893,7 +893,7 @@ func TestClientSwitchClientWrapsRunnerError(t *testing.T) {
 		return nil, errors.New("tmux failed")
 	}))
 
-	err := client.SwitchClient(context.Background(), "dotfiles")
+	err := client.SwitchClient(context.Background(), "workspace")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -911,12 +911,12 @@ func TestClientKillSessionRunsTmuxKill(t *testing.T) {
 	}
 	client := NewClient(runner)
 
-	if err := client.KillSession(context.Background(), "dotfiles"); err != nil {
+	if err := client.KillSession(context.Background(), "workspace"); err != nil {
 		t.Fatalf("KillSession returned error: %v", err)
 	}
 
 	want := []commandCall{
-		{name: "tmux", args: []string{"kill-session", "-t", "dotfiles"}},
+		{name: "tmux", args: []string{"kill-session", "-t", "workspace"}},
 	}
 	if !reflect.DeepEqual(runner.calls, want) {
 		t.Fatalf("unexpected calls %#v", runner.calls)
@@ -944,7 +944,7 @@ func TestClientKillSessionWrapsRunnerError(t *testing.T) {
 		return nil, errors.New("tmux failed")
 	}))
 
-	err := client.KillSession(context.Background(), "dotfiles")
+	err := client.KillSession(context.Background(), "workspace")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -1138,12 +1138,12 @@ func TestClientOpenSessionTargetSwitchesToPaneInsideTmux(t *testing.T) {
 	}
 	client := newClientWithEnv(runner, func(string) string { return "/tmp/tmux-sock" })
 
-	if err := client.OpenSessionTarget(context.Background(), "dotfiles", "3", "8"); err != nil {
+	if err := client.OpenSessionTarget(context.Background(), "workspace", "3", "8"); err != nil {
 		t.Fatalf("OpenSessionTarget returned error: %v", err)
 	}
 
 	want := []commandCall{
-		{name: "tmux", args: []string{"switch-client", "-t", "dotfiles:3.8"}},
+		{name: "tmux", args: []string{"switch-client", "-t", "workspace:3.8"}},
 	}
 	if !reflect.DeepEqual(runner.calls, want) {
 		t.Fatalf("unexpected calls %#v", runner.calls)
@@ -1159,12 +1159,12 @@ func TestClientOpenSessionTargetAttachesToWindowOutsideTmux(t *testing.T) {
 	}
 	client := newClientWithEnv(runner, func(string) string { return "" })
 
-	if err := client.OpenSessionTarget(context.Background(), "dotfiles", "3", "8"); err != nil {
+	if err := client.OpenSessionTarget(context.Background(), "workspace", "3", "8"); err != nil {
 		t.Fatalf("OpenSessionTarget returned error: %v", err)
 	}
 
 	want := []commandCall{
-		{name: "tmux", args: []string{"attach-session", "-t", "dotfiles:3"}},
+		{name: "tmux", args: []string{"attach-session", "-t", "workspace:3"}},
 	}
 	if !reflect.DeepEqual(runner.calls, want) {
 		t.Fatalf("unexpected calls %#v", runner.calls)
@@ -1193,7 +1193,7 @@ func TestClientOpenSessionTargetRejectsPaneWithoutWindow(t *testing.T) {
 		return nil, nil
 	}))
 
-	err := client.OpenSessionTarget(context.Background(), "dotfiles", "", "8")
+	err := client.OpenSessionTarget(context.Background(), "workspace", "", "8")
 	if !errors.Is(err, errWindowIndexRequired) {
 		t.Fatalf("OpenSessionTarget error = %v, want %v", err, errWindowIndexRequired)
 	}
@@ -1206,7 +1206,7 @@ func TestClientOpenSessionTargetWrapsRunnerError(t *testing.T) {
 		return nil, errors.New("tmux failed")
 	}), func(string) string { return "/tmp/tmux-sock" })
 
-	err := client.OpenSessionTarget(context.Background(), "dotfiles", "3", "8")
+	err := client.OpenSessionTarget(context.Background(), "workspace", "3", "8")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -1411,7 +1411,7 @@ func TestClientEnsureSessionRequiresCWD(t *testing.T) {
 		return nil, nil
 	}))
 
-	err := client.EnsureSession(context.Background(), "dotfiles", "")
+	err := client.EnsureSession(context.Background(), "workspace", "")
 	if !errors.Is(err, errSessionCWDRequired) {
 		t.Fatalf("EnsureSession error = %v, want %v", err, errSessionCWDRequired)
 	}

@@ -219,7 +219,7 @@ func (c *Client) RecentSessionSummaries(ctx context.Context) ([]RecentSessionSum
 // ListEphemeralSessions lists tmux sessions with the lifecycle metadata needed
 // for auto-attach reuse and stale-session pruning decisions.
 func (c *Client) ListEphemeralSessions(ctx context.Context) ([]lifecycle.SessionInventory, error) {
-	output, err := c.runner.Run(ctx, "tmux", "list-sessions", "-F", "#{session_name}\t#{session_attached}\t#{session_last_attached}\t#{@dotfiles_ephemeral}")
+	output, err := c.runner.Run(ctx, "tmux", "list-sessions", "-F", "#{session_name}\t#{session_attached}\t#{session_last_attached}\t#{@projmux_ephemeral}")
 	if err != nil {
 		if isNoServerError(err) {
 			return nil, nil
@@ -267,7 +267,7 @@ func (c *Client) ListSessionWindows(ctx context.Context, sessionName string) ([]
 
 // ListAllPanes lists tmux panes across all sessions with active hints.
 func (c *Client) ListAllPanes(ctx context.Context) ([]Pane, error) {
-	output, err := c.runner.Run(ctx, "tmux", "list-panes", "-a", "-F", "#{session_name}\t#{pane_id}\t#{window_index}\t#{pane_index}\t#{?pane_active,1,0}\t#{pane_title}\t#{@dotfiles_attention_state}\t#{pane_current_command}\t#{pane_current_path}")
+	output, err := c.runner.Run(ctx, "tmux", "list-panes", "-a", "-F", "#{session_name}\t#{pane_id}\t#{window_index}\t#{pane_index}\t#{?pane_active,1,0}\t#{pane_title}\t#{@projmux_attention_state}\t#{pane_current_command}\t#{pane_current_path}")
 	if err != nil {
 		return nil, fmt.Errorf("list tmux panes: %w", err)
 	}
@@ -343,7 +343,7 @@ func (c *Client) EnsureSession(ctx context.Context, sessionName, cwd string) err
 }
 
 // CreateEphemeralSession creates a detached tmux session and marks it as a
-// dotfiles-compatible ephemeral session.
+// CreateEphemeralSession creates a projmux-managed ephemeral session.
 func (c *Client) CreateEphemeralSession(ctx context.Context, sessionName, cwd string) error {
 	if strings.TrimSpace(sessionName) == "" {
 		return errSessionNameRequired
@@ -355,7 +355,7 @@ func (c *Client) CreateEphemeralSession(ctx context.Context, sessionName, cwd st
 	if _, err := c.runner.Run(ctx, "tmux", "new-session", "-d", "-s", sessionName, "-c", cwd); err != nil {
 		return fmt.Errorf("create tmux ephemeral session %q: %w", sessionName, err)
 	}
-	if _, err := c.runner.Run(ctx, "tmux", "set-option", "-t", sessionName, "-q", "@dotfiles_ephemeral", "1"); err != nil {
+	if _, err := c.runner.Run(ctx, "tmux", "set-option", "-t", sessionName, "-q", "@projmux_ephemeral", "1"); err != nil {
 		return nil
 	}
 

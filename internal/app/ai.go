@@ -172,7 +172,7 @@ func (c *aiCommand) resetAINotification(paneID string) error {
 	if strings.TrimSpace(paneID) == "" {
 		return nil
 	}
-	_ = c.run("tmux", "set-option", "-p", "-u", "-t", paneID, "@dotfiles_desktop_notified")
+	_ = c.run("tmux", "set-option", "-p", "-u", "-t", paneID, "@projmux_desktop_notified")
 	return nil
 }
 
@@ -181,7 +181,7 @@ func (c *aiCommand) notifyAI(paneID string) error {
 	if paneID == "" {
 		return nil
 	}
-	if c.readTmuxPaneOption(paneID, "@dotfiles_desktop_notified") == "1" {
+	if c.readTmuxPaneOption(paneID, "@projmux_desktop_notified") == "1" {
 		return nil
 	}
 
@@ -200,7 +200,7 @@ func (c *aiCommand) notifyAI(paneID string) error {
 
 	summary := aiSummaryForKind(replyKind, agentName, cleanTitle)
 	body := aiNotificationBody(aiProjectName(panePath), c.gitBranchForPath(panePath), sessionName, windowName, paneID)
-	if err := c.dispatchAINotification(summary, body, aiUrgencyForKind(replyKind), "dotfiles.TmuxCodex", paneID, sessionName); err != nil {
+	if err := c.dispatchAINotification(summary, body, aiUrgencyForKind(replyKind), "projmux.TmuxCodex", paneID, sessionName); err != nil {
 		return nil
 	}
 	c.recordAINotification(paneID, key)
@@ -472,11 +472,11 @@ func (c *aiCommand) configFile() string {
 	if configHome == "" {
 		homeDir, err := c.home()
 		if err != nil || strings.TrimSpace(homeDir) == "" {
-			return filepath.Join(".config", "dotfiles", "tmux-ai-split-mode")
+			return filepath.Join(".config", "projmux", "tmux-ai-split-mode")
 		}
 		configHome = filepath.Join(homeDir, ".config")
 	}
-	return filepath.Join(configHome, "dotfiles", "tmux-ai-split-mode")
+	return filepath.Join(configHome, "projmux", "tmux-ai-split-mode")
 }
 
 func (c *aiCommand) openPicker(direction string) error {
@@ -930,14 +930,14 @@ func (c *aiCommand) duplicateAINotificationRecent(paneID, key string) bool {
 	if key == "" {
 		return false
 	}
-	dedupeSeconds := parsePositiveInt(c.env("DOTFILES_TMUX_NOTIFY_DEDUPE_SECONDS"))
+	dedupeSeconds := parsePositiveInt(c.env("PROJMUX_TMUX_NOTIFY_DEDUPE_SECONDS"))
 	if dedupeSeconds <= 0 {
 		dedupeSeconds = 120
 	}
-	if c.readTmuxPaneOption(paneID, "@dotfiles_desktop_notification_key") != key {
+	if c.readTmuxPaneOption(paneID, "@projmux_desktop_notification_key") != key {
 		return false
 	}
-	lastAt := parsePositiveInt(c.readTmuxPaneOption(paneID, "@dotfiles_desktop_notification_at"))
+	lastAt := parsePositiveInt(c.readTmuxPaneOption(paneID, "@projmux_desktop_notification_at"))
 	if lastAt <= 0 {
 		return false
 	}
@@ -945,11 +945,11 @@ func (c *aiCommand) duplicateAINotificationRecent(paneID, key string) bool {
 }
 
 func (c *aiCommand) recordAINotification(paneID, key string) {
-	_ = c.run("tmux", "set-option", "-p", "-t", paneID, "@dotfiles_desktop_notified", "1")
+	_ = c.run("tmux", "set-option", "-p", "-t", paneID, "@projmux_desktop_notified", "1")
 	if key != "" {
-		_ = c.run("tmux", "set-option", "-p", "-t", paneID, "@dotfiles_desktop_notification_key", key)
+		_ = c.run("tmux", "set-option", "-p", "-t", paneID, "@projmux_desktop_notification_key", key)
 	}
-	_ = c.run("tmux", "set-option", "-p", "-t", paneID, "@dotfiles_desktop_notification_at", fmt.Sprintf("%d", c.now().Unix()))
+	_ = c.run("tmux", "set-option", "-p", "-t", paneID, "@projmux_desktop_notification_at", fmt.Sprintf("%d", c.now().Unix()))
 }
 
 func (c *aiCommand) dispatchAINotification(summary, body, urgency, appName, tag, group string) error {
@@ -1019,7 +1019,7 @@ func (c *aiCommand) gitBranchForPath(path string) string {
 }
 
 func (c *aiCommand) readAIWatchSnapshot(paneID string) (title, state, ack string) {
-	const delim = "__DOTFILES_TMUX_AI_SEP__"
+	const delim = "__PROJMUX_TMUX_AI_SEP__"
 	snapshot := c.readTrimmed("tmux", "display-message", "-p", "-t", paneID, "#{pane_title}"+delim+"#{"+attentionStateOption+"}"+delim+"#{"+attentionAckOption+"}")
 	title, rest, ok := strings.Cut(snapshot, delim)
 	if !ok {
@@ -1030,7 +1030,7 @@ func (c *aiCommand) readAIWatchSnapshot(paneID string) (title, state, ack string
 }
 
 func (c *aiCommand) watchInterval() time.Duration {
-	value := strings.TrimSpace(c.env("DOTFILES_CODEX_TITLE_WATCH_INTERVAL"))
+	value := strings.TrimSpace(c.env("PROJMUX_CODEX_TITLE_WATCH_INTERVAL"))
 	if value == "" {
 		return 400 * time.Millisecond
 	}
@@ -1060,7 +1060,7 @@ func (c *aiCommand) watchInterval() time.Duration {
 }
 
 func (c *aiCommand) watchSettleLoops() int {
-	loops := parsePositiveInt(c.env("DOTFILES_CODEX_REPLY_SETTLE_LOOPS"))
+	loops := parsePositiveInt(c.env("PROJMUX_CODEX_REPLY_SETTLE_LOOPS"))
 	if loops <= 0 {
 		return 3
 	}

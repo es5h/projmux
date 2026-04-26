@@ -322,8 +322,8 @@ func TestAIStatusSetThinkingMarksPaneBusy(t *testing.T) {
 	}
 
 	want := []recordedAICommand{
-		{name: "tmux", args: []string{"set-option", "-p", "-t", "%1", "@dotfiles_attention_state", "busy"}},
-		{name: "tmux", args: []string{"set-option", "-p", "-u", "-t", "%1", "@dotfiles_attention_ack"}},
+		{name: "tmux", args: []string{"set-option", "-p", "-t", "%1", "@projmux_attention_state", "busy"}},
+		{name: "tmux", args: []string{"set-option", "-p", "-u", "-t", "%1", "@projmux_attention_ack"}},
 		{name: "tmux", args: []string{"select-pane", "-T", "⠹ codex: repo", "-t", "%1"}},
 	}
 	if !reflect.DeepEqual(cmdRecorder(cmd).commands, want) {
@@ -358,9 +358,9 @@ func TestAIStatusSetWaitingMarksPaneReplyAndNotifies(t *testing.T) {
 		switch {
 		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#{pane_title}"}):
 			return []byte("Codex: approval needed\n"), nil
-		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#{@dotfiles_desktop_notified}"}),
-			reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#{@dotfiles_desktop_notification_key}"}),
-			reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#{@dotfiles_desktop_notification_at}"}):
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#{@projmux_desktop_notified}"}),
+			reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#{@projmux_desktop_notification_key}"}),
+			reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#{@projmux_desktop_notification_at}"}):
 			return []byte("\n"), nil
 		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#S"}):
 			return []byte("repo\n"), nil
@@ -378,8 +378,8 @@ func TestAIStatusSetWaitingMarksPaneReplyAndNotifies(t *testing.T) {
 
 	commands := cmdRecorder(cmd).commands
 	wantPrefix := []recordedAICommand{
-		{name: "tmux", args: []string{"set-option", "-p", "-t", "%2", "@dotfiles_attention_state", "reply"}},
-		{name: "tmux", args: []string{"set-option", "-p", "-u", "-t", "%2", "@dotfiles_attention_ack"}},
+		{name: "tmux", args: []string{"set-option", "-p", "-t", "%2", "@projmux_attention_state", "reply"}},
+		{name: "tmux", args: []string{"set-option", "-p", "-u", "-t", "%2", "@projmux_attention_ack"}},
 		{name: "tmux", args: []string{"select-pane", "-T", "✳ Codex: approval needed", "-t", "%2"}},
 	}
 	if len(commands) < len(wantPrefix) || !reflect.DeepEqual(commands[:len(wantPrefix)], wantPrefix) {
@@ -389,7 +389,7 @@ func TestAIStatusSetWaitingMarksPaneReplyAndNotifies(t *testing.T) {
 		t.Fatalf("commands = %#v, want notify-send dispatch", commands)
 	}
 	if !containsAICommandArgs(commands, "notify-send", []string{
-		"--app-name=dotfiles.TmuxCodex",
+		"--app-name=projmux.TmuxCodex",
 		"--icon=dialog-information",
 		"--urgency=critical",
 		"Codex 승인 필요 · approval needed",
@@ -397,7 +397,7 @@ func TestAIStatusSetWaitingMarksPaneReplyAndNotifies(t *testing.T) {
 	}) {
 		t.Fatalf("commands = %#v, want enriched notify-send message", commands)
 	}
-	if !containsAICommandArg(commands, "@dotfiles_desktop_notified") {
+	if !containsAICommandArg(commands, "@projmux_desktop_notified") {
 		t.Fatalf("commands = %#v, want notification record", commands)
 	}
 }
@@ -407,7 +407,7 @@ func TestAINotifySkipsRecentDuplicateButRefreshesRecord(t *testing.T) {
 	cmd := testAICommand(home)
 	cmd.now = func() time.Time { return time.Unix(1000, 0) }
 	cmd.lookupEnv = func(name string) string {
-		if name == "DOTFILES_TMUX_NOTIFY_DEDUPE_SECONDS" {
+		if name == "PROJMUX_TMUX_NOTIFY_DEDUPE_SECONDS" {
 			return "120"
 		}
 		return ""
@@ -418,13 +418,13 @@ func TestAINotifySkipsRecentDuplicateButRefreshesRecord(t *testing.T) {
 			return nil, os.ErrNotExist
 		}
 		switch {
-		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%3", "#{@dotfiles_desktop_notified}"}):
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%3", "#{@projmux_desktop_notified}"}):
 			return []byte("\n"), nil
 		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%3", "#{pane_title}"}):
 			return []byte("waiting for input\n"), nil
-		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%3", "#{@dotfiles_desktop_notification_key}"}):
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%3", "#{@projmux_desktop_notification_key}"}):
 			return []byte(key + "\n"), nil
-		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%3", "#{@dotfiles_desktop_notification_at}"}):
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%3", "#{@projmux_desktop_notification_at}"}):
 			return []byte("950\n"), nil
 		}
 		return []byte("\n"), nil
@@ -437,7 +437,7 @@ func TestAINotifySkipsRecentDuplicateButRefreshesRecord(t *testing.T) {
 	if containsAICommand(commands, "notify-send") {
 		t.Fatalf("commands = %#v, did not expect notify-send for duplicate", commands)
 	}
-	if !containsAICommandArg(commands, "@dotfiles_desktop_notification_at") {
+	if !containsAICommandArg(commands, "@projmux_desktop_notification_at") {
 		t.Fatalf("commands = %#v, want refreshed notification timestamp", commands)
 	}
 }
@@ -457,8 +457,8 @@ func TestAIWatchTitlePromotesBusyPaneToThinking(t *testing.T) {
 				return nil, os.ErrNotExist
 			}
 			return []byte("%4\n"), nil
-		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%4", "#{pane_title}__DOTFILES_TMUX_AI_SEP__#{@dotfiles_attention_state}__DOTFILES_TMUX_AI_SEP__#{@dotfiles_attention_ack}"}):
-			return []byte("thinking hard__DOTFILES_TMUX_AI_SEP____DOTFILES_TMUX_AI_SEP__\n"), nil
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%4", "#{pane_title}__PROJMUX_TMUX_AI_SEP__#{@projmux_attention_state}__PROJMUX_TMUX_AI_SEP__#{@projmux_attention_ack}"}):
+			return []byte("thinking hard__PROJMUX_TMUX_AI_SEP____PROJMUX_TMUX_AI_SEP__\n"), nil
 		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%4", "#{pane_title}"}):
 			return []byte("thinking hard\n"), nil
 		}
@@ -481,7 +481,7 @@ func TestAIWatchTitleSettledBusyReturnsIdleWithoutNotification(t *testing.T) {
 		switch name {
 		case "HOME":
 			return home
-		case "DOTFILES_CODEX_REPLY_SETTLE_LOOPS":
+		case "PROJMUX_CODEX_REPLY_SETTLE_LOOPS":
 			return "2"
 		default:
 			return ""
@@ -489,9 +489,9 @@ func TestAIWatchTitleSettledBusyReturnsIdleWithoutNotification(t *testing.T) {
 	}
 	checks := 0
 	snapshots := []string{
-		"thinking hard__DOTFILES_TMUX_AI_SEP____DOTFILES_TMUX_AI_SEP__",
-		"repo__DOTFILES_TMUX_AI_SEP__busy__DOTFILES_TMUX_AI_SEP__",
-		"repo__DOTFILES_TMUX_AI_SEP__busy__DOTFILES_TMUX_AI_SEP__",
+		"thinking hard__PROJMUX_TMUX_AI_SEP____PROJMUX_TMUX_AI_SEP__",
+		"repo__PROJMUX_TMUX_AI_SEP__busy__PROJMUX_TMUX_AI_SEP__",
+		"repo__PROJMUX_TMUX_AI_SEP__busy__PROJMUX_TMUX_AI_SEP__",
 	}
 	cmd.readCommand = func(_ context.Context, name string, args ...string) ([]byte, error) {
 		if name == "command" && reflect.DeepEqual(args, []string{"-v", "notify-send"}) {
@@ -507,7 +507,7 @@ func TestAIWatchTitleSettledBusyReturnsIdleWithoutNotification(t *testing.T) {
 				return nil, os.ErrNotExist
 			}
 			return []byte("%6\n"), nil
-		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%6", "#{pane_title}__DOTFILES_TMUX_AI_SEP__#{@dotfiles_attention_state}__DOTFILES_TMUX_AI_SEP__#{@dotfiles_attention_ack}"}):
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%6", "#{pane_title}__PROJMUX_TMUX_AI_SEP__#{@projmux_attention_state}__PROJMUX_TMUX_AI_SEP__#{@projmux_attention_ack}"}):
 			return []byte(snapshots[checks-1] + "\n"), nil
 		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%6", "#{pane_title}"}):
 			if checks <= 1 {
@@ -613,7 +613,7 @@ func cmdRecorder(cmd *aiCommand) *aiCommandRecorder {
 
 func readModeFile(t *testing.T, home string) string {
 	t.Helper()
-	content, err := os.ReadFile(filepath.Join(home, ".config", "dotfiles", "tmux-ai-split-mode"))
+	content, err := os.ReadFile(filepath.Join(home, ".config", "projmux", "tmux-ai-split-mode"))
 	if err != nil {
 		t.Fatal(err)
 	}

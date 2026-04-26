@@ -1,9 +1,9 @@
 # Agent Guide
 
 ## Scope
-- `projmux` is the extracted tmux session-management core.
-- `dotfiles` remains the adapter layer for tmux bindings, shell entry policy, terminal integration, and install wiring.
-- Agents should preserve that boundary. Do not move adapter-only behavior into `projmux` unless the migration plan explicitly calls for it.
+- `projmux` is a standalone tmux session-management application.
+- Keep portable session-management behavior in `projmux`.
+- Keep machine-local policy outside the application unless the migration plan explicitly calls for it.
 
 ## Startup Checks
 - Run `wt --version`.
@@ -41,7 +41,7 @@
 - Port one stable slice at a time. Do not mix bootstrap, feature redesign, and parity fixes in one change without a strong reason.
 - Match existing behavior first, then simplify or redesign in a later change.
 - When replacing shell logic with Go, keep the user-facing entrypoints stable until the adapter layer is intentionally updated.
-- Compare new behavior against the legacy dotfiles commands whenever the migrated feature already exists there.
+- Compare new behavior against the maintained parity tests whenever the migrated feature already has coverage.
 - Record intentional behavior differences in docs and review notes.
 
 ## Testing Policy

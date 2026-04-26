@@ -5,10 +5,9 @@ import (
 	"strings"
 )
 
-// Namer ports the legacy directory-to-session identity rules from dotfiles.
+// Namer resolves directory paths to stable tmux session names.
 type Namer struct {
-	homeDir     string
-	dotfilesDir string
+	homeDir string
 }
 
 // NewNamer builds a session namer for the given home directory.
@@ -16,8 +15,7 @@ func NewNamer(homeDir string) Namer {
 	cleanHome := filepath.Clean(homeDir)
 
 	return Namer{
-		homeDir:     cleanHome,
-		dotfilesDir: filepath.Join(cleanHome, "dotfiles"),
+		homeDir: cleanHome,
 	}
 }
 
@@ -26,8 +24,6 @@ func (n Namer) SessionName(dir string) string {
 	switch dir {
 	case n.homeDir:
 		return "home"
-	case n.dotfilesDir:
-		return "dotfiles"
 	}
 
 	trimmedDir := trimTrailingSeparators(dir)

@@ -30,8 +30,8 @@
 - ephemeral prune
 - kube session support
 
-## Milestone 5: Dotfiles integration
-- replace shell wrappers with thin `projmux` wrappers
-- update dotfiles install flow
-- document migration steps for source and target machines
+## Milestone 5: Standalone integration
+- replace shell wrappers with thin `projmux` commands
+- update generated install flow
+- document setup steps for source and target machines
 - define picker-agnostic popup close/toggle handling so AI picker dismissal does not depend on fzf-specific key bindings

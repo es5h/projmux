@@ -51,14 +51,14 @@ Responsibilities:
 
 This keeps parity with the existing shell workflow while moving state and behavior into Go.
 
-### 4. Dotfiles adapter
-This repo does not own the adapter, but the design must support it.
+### 4. Local environment
+This repo owns the portable application behavior and generated tmux config.
 
 Responsibilities that remain outside `projmux`:
-- `.tmux.conf` key bindings
-- Ghostty escape sequence mapping
-- shell startup auto-attach policy
-- install-time symlinks and package checks
+- terminal emulator key dispatch
+- shell startup policy
+- install-time package checks
+- machine-specific path and symlink choices
 
 ## Configuration model
 

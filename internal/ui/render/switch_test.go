@@ -6,9 +6,9 @@ func TestBuildSwitchRowsFormatsSessionModeAndPath(t *testing.T) {
 	t.Parallel()
 
 	rows := BuildSwitchRows([]SwitchCandidate{{
-		Path:        "/home/tester/dotfiles",
-		DisplayPath: "~/dotfiles",
-		SessionName: "dotfiles",
+		Path:        "/home/tester/workspace",
+		DisplayPath: "~/workspace",
+		SessionName: "workspace",
 		ModeLabel:   "existing",
 		UI:          "popup",
 	}})
@@ -16,10 +16,10 @@ func TestBuildSwitchRowsFormatsSessionModeAndPath(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("row count = %d, want 1", len(rows))
 	}
-	if got, want := rows[0].Label, "[ ]     \x1b[32m[Existing]\x1b[0m  dotfiles  ~/dotfiles"; got != want {
+	if got, want := rows[0].Label, "[ ]     \x1b[32m[Existing]\x1b[0m  workspace  ~/workspace"; got != want {
 		t.Fatalf("label = %q, want %q", got, want)
 	}
-	if got, want := rows[0].Value, "/home/tester/dotfiles"; got != want {
+	if got, want := rows[0].Value, "/home/tester/workspace"; got != want {
 		t.Fatalf("value = %q, want %q", got, want)
 	}
 }
@@ -49,7 +49,7 @@ func TestPrettyPathPrefersRepoRootAlias(t *testing.T) {
 func TestPrettyPathFallsBackToHomeAlias(t *testing.T) {
 	t.Parallel()
 
-	if got, want := PrettyPath("/home/tester/dotfiles", "/home/tester", "/repo"), "~/dotfiles"; got != want {
+	if got, want := PrettyPath("/home/tester/workspace", "/home/tester", "/repo"), "~/workspace"; got != want {
 		t.Fatalf("PrettyPath() = %q, want %q", got, want)
 	}
 }

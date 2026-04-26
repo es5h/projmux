@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	attentionStateOption = "@dotfiles_attention_state"
-	attentionAckOption   = "@dotfiles_attention_ack"
+	attentionStateOption = "@projmux_attention_state"
+	attentionAckOption   = "@projmux_attention_ack"
 	attentionStateBusy   = "busy"
 	attentionStateReply  = "reply"
 )
@@ -141,7 +141,7 @@ func (c *attentionCommand) paneTitle(paneID string) string {
 }
 
 func (c *attentionCommand) windowAttentionRows(windowID string) []attentionWindowRow {
-	output, err := c.run("tmux", "list-panes", "-t", windowID, "-F", "#{pane_title}\t#{@dotfiles_attention_state}")
+	output, err := c.run("tmux", "list-panes", "-t", windowID, "-F", "#{pane_title}\t#{@projmux_attention_state}")
 	if err != nil {
 		return nil
 	}

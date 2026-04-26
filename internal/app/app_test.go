@@ -19,7 +19,7 @@ func TestAppRunCurrentEnsuresAndOpensDerivedSession(t *testing.T) {
 		current: &currentCommand{
 			currentPath: staticCurrentPath("/tmp/projmux"),
 			sessions:    executor,
-			identity:    staticIdentity("dotfiles"),
+			identity:    staticIdentity("workspace"),
 			validate:    func(string) error { return nil },
 		},
 	}
@@ -27,10 +27,10 @@ func TestAppRunCurrentEnsuresAndOpensDerivedSession(t *testing.T) {
 	if err := app.Run([]string{"current"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
-	if executor.ensureSessionName != "dotfiles" || executor.ensureCWD != "/tmp/projmux" {
+	if executor.ensureSessionName != "workspace" || executor.ensureCWD != "/tmp/projmux" {
 		t.Fatalf("EnsureSession called with %q %q", executor.ensureSessionName, executor.ensureCWD)
 	}
-	if executor.openSessionName != "dotfiles" {
+	if executor.openSessionName != "workspace" {
 		t.Fatalf("OpenSession called with %q", executor.openSessionName)
 	}
 }
@@ -184,7 +184,7 @@ func TestAppRunCurrentPropagatesEnsureSessionError(t *testing.T) {
 			sessions: &recordingCurrentSessionExecutor{
 				ensureErr: errors.New("create failed"),
 			},
-			identity: staticIdentity("dotfiles"),
+			identity: staticIdentity("workspace"),
 			validate: func(string) error { return nil },
 		},
 	}
@@ -207,7 +207,7 @@ func TestAppRunCurrentPropagatesOpenSessionError(t *testing.T) {
 			sessions: &recordingCurrentSessionExecutor{
 				openErr: errors.New("attach failed"),
 			},
-			identity: staticIdentity("dotfiles"),
+			identity: staticIdentity("workspace"),
 			validate: func(string) error { return nil },
 		},
 	}

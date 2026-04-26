@@ -3,9 +3,8 @@
 터미널에서 프로젝트별 tmux 세션을 빠르게 만들고 전환하기 위한 도구입니다.
 
 `projmux`는 프로젝트 디렉터리를 안정적인 tmux 세션으로 매핑하고, `fzf`
-기반의 전환 UI와 미리보기를 제공합니다. 개인 dotfiles에 묶이지 않도록 필요한
-tmux 설정도 직접 생성합니다. dotfiles 저장소나 개인 shell 설정을 몰라도 설치해
-사용할 수 있어야 합니다.
+기반의 전환 UI와 미리보기를 제공합니다. 격리된 앱 서버와 일반 tmux 서버에
+필요한 tmux 설정도 직접 생성합니다.
 
 [English README](README.md)
 
@@ -55,8 +54,8 @@ projmux help
 ```
 
 여기까지면 standalone 앱 경로를 사용할 준비가 끝납니다. `projmux shell`은 자체
-tmux 설정을 생성하므로 기존 `.tmux.conf` include, zsh framework, dotfiles
-checkout이 필요하지 않습니다.
+tmux 설정을 생성하므로 기존 `.tmux.conf` include나 zsh framework가 필요하지
+않습니다.
 
 개발 중에는 다음 명령을 사용합니다:
 
@@ -83,8 +82,8 @@ projmux shell
 tmux -L projmux -f ~/.config/projmux/tmux.conf new-session -A -s main
 ```
 
-이 경로가 권장되는 dotfiles-free 진입점입니다. projmux가 이 tmux 서버, 생성된
-설정, status bar, popup binding을 직접 소유합니다.
+이 경로가 권장되는 첫 실행 진입점입니다. projmux가 이 tmux 서버, 생성된 설정,
+status bar, popup binding을 직접 소유합니다.
 
 앱 세션의 하단 좌측 뱃지는 현재 pane의 프로젝트 이름을 보여줍니다. 하단
 우측에는 현재 경로, kube segment, git segment, 시간이 표시됩니다.
@@ -151,9 +150,7 @@ if [[ -o interactive && -z "${TMUX:-}" ]] && command -v projmux >/dev/null 2>&1;
 fi
 ```
 
-로그인 shell 정책, terminal emulator key dispatch, OS별 패키지 설치는 각자의
-dotfiles에 두는 편이 좋습니다. `projmux`는 안정적인 앱 entrypoint와 생성 가능한
-tmux 설정을 제공합니다.
+`projmux`는 안정적인 앱 entrypoint와 생성 가능한 tmux 설정을 제공합니다.
 
 ## 명령어
 
@@ -231,15 +228,11 @@ project root를 합쳐 후보를 만듭니다. 기본 탐색은 존재하는 경
 ~/.config/tmux/projmux.conf
 ```
 
-## 역할 경계
+## 범위
 
 `projmux`는 portable한 세션 관리 핵심을 담당합니다. 예를 들어 session naming,
 project discovery, pin, preview state, tmux orchestration, status segment,
 생성 가능한 tmux binding이 여기에 속합니다.
-
-dotfiles는 선택 사항입니다. 있다면 terminal emulator key dispatch, zsh startup
-정책, 머신별 패키지와 symlink 같은 로컬 정책만 그쪽에 두는 것이 좋습니다. 앱은
-그런 저장소의 존재를 몰라도 설치되고 쓸 수 있어야 합니다.
 
 ## 개발
 

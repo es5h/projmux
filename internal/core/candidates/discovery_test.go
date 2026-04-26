@@ -11,7 +11,7 @@ func TestDiscoverOrdersAndDeduplicatesCandidates(t *testing.T) {
 	t.Parallel()
 
 	fixture := newFixture(t)
-	fixture.mkdir("home/dotfiles")
+	fixture.mkdir("home")
 	fixture.mkdir("pins/alpha")
 	fixture.mkdir("pins/beta")
 	fixture.mkdir("rp/repo-a")
@@ -37,7 +37,6 @@ func TestDiscoverOrdersAndDeduplicatesCandidates(t *testing.T) {
 
 	want := []string{
 		fixture.path("home"),
-		fixture.path("home/dotfiles"),
 		fixture.path("pins/alpha"),
 		fixture.path("pins/beta"),
 		fixture.path("rp/repo-a"),
@@ -55,7 +54,7 @@ func TestDiscoverSkipsMissingInputs(t *testing.T) {
 	t.Parallel()
 
 	fixture := newFixture(t)
-	fixture.mkdir("home/dotfiles")
+	fixture.mkdir("home")
 	fixture.mkdir("rp")
 
 	got, err := Discover(Inputs{
@@ -71,7 +70,6 @@ func TestDiscoverSkipsMissingInputs(t *testing.T) {
 
 	want := []string{
 		fixture.path("home"),
-		fixture.path("home/dotfiles"),
 	}
 
 	if !slices.Equal(got, want) {
@@ -83,7 +81,7 @@ func TestDiscoverKeepsCurrentPathWhenOutsideManagedRoots(t *testing.T) {
 	t.Parallel()
 
 	fixture := newFixture(t)
-	fixture.mkdir("home/dotfiles")
+	fixture.mkdir("home")
 	fixture.mkdir("outside/project/deeper")
 
 	got, err := Discover(Inputs{
@@ -96,7 +94,6 @@ func TestDiscoverKeepsCurrentPathWhenOutsideManagedRoots(t *testing.T) {
 
 	want := []string{
 		fixture.path("home"),
-		fixture.path("home/dotfiles"),
 		fixture.path("outside/project/deeper"),
 	}
 
@@ -109,7 +106,7 @@ func TestDiscoverSnapsCurrentPathAgainstRepoRootFirst(t *testing.T) {
 	t.Parallel()
 
 	fixture := newFixture(t)
-	fixture.mkdir("home/dotfiles")
+	fixture.mkdir("home")
 	fixture.mkdir("rp/repo-a/deeper")
 
 	got, err := Discover(Inputs{
@@ -124,7 +121,6 @@ func TestDiscoverSnapsCurrentPathAgainstRepoRootFirst(t *testing.T) {
 
 	want := []string{
 		fixture.path("home"),
-		fixture.path("home/dotfiles"),
 		fixture.path("rp/repo-a"),
 	}
 

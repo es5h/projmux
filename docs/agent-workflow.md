@@ -40,7 +40,7 @@
 
 ## Review Checklist
 - The branch stays within its stated scope.
-- The change preserves migration boundaries between `projmux` core and `dotfiles` adapters.
+- The change preserves boundaries between portable `projmux` behavior and local machine policy.
 - The required `make` targets were run in order.
 - Test inventory updates are included when behavior changed.
 - Known parity gaps are explicit.

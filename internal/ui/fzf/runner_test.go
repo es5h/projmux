@@ -62,7 +62,7 @@ func TestRunnerRunInvokesFZFWithCandidates(t *testing.T) {
 func TestRunnerRunReturnsHiddenEntryValue(t *testing.T) {
 	t.Parallel()
 
-	fake := &fakeCommand{stdout: "dotfiles  [existing]  /home/tester/dotfiles\t/home/tester/dotfiles\n"}
+	fake := &fakeCommand{stdout: "workspace  [existing]  /home/tester/workspace\t/home/tester/workspace\n"}
 
 	r := &runner{
 		lookupPath:     func(string) (string, error) { return "/usr/bin/fzf", nil },
@@ -73,16 +73,16 @@ func TestRunnerRunReturnsHiddenEntryValue(t *testing.T) {
 	got, err := r.Run(Options{
 		UI: "popup",
 		Entries: []Entry{
-			{Label: "dotfiles  [existing]  /home/tester/dotfiles", Value: "/home/tester/dotfiles"},
+			{Label: "workspace  [existing]  /home/tester/workspace", Value: "/home/tester/workspace"},
 		},
 	})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if got != (Result{Value: "/home/tester/dotfiles"}) {
+	if got != (Result{Value: "/home/tester/workspace"}) {
 		t.Fatalf("Run() = %#v, want hidden value", got)
 	}
-	if got, want := fake.stdin.String(), "dotfiles  [existing]  /home/tester/dotfiles\t/home/tester/dotfiles"; got != want {
+	if got, want := fake.stdin.String(), "workspace  [existing]  /home/tester/workspace\t/home/tester/workspace"; got != want {
 		t.Fatalf("stdin = %q, want %q", got, want)
 	}
 }
@@ -90,7 +90,7 @@ func TestRunnerRunReturnsHiddenEntryValue(t *testing.T) {
 func TestRunnerRunReturnsExpectedKeyAndHiddenValue(t *testing.T) {
 	t.Parallel()
 
-	fake := &fakeCommand{stdout: "alt-t\ndotfiles  [existing]  /home/tester/dotfiles\t/home/tester/dotfiles\n"}
+	fake := &fakeCommand{stdout: "alt-t\nworkspace  [existing]  /home/tester/workspace\t/home/tester/workspace\n"}
 
 	r := &runner{
 		lookupPath:     func(string) (string, error) { return "/usr/bin/fzf", nil },
@@ -120,13 +120,13 @@ func TestRunnerRunReturnsExpectedKeyAndHiddenValue(t *testing.T) {
 		UI:         "popup",
 		ExpectKeys: []string{"alt-t"},
 		Entries: []Entry{
-			{Label: "dotfiles  [existing]  /home/tester/dotfiles", Value: "/home/tester/dotfiles"},
+			{Label: "workspace  [existing]  /home/tester/workspace", Value: "/home/tester/workspace"},
 		},
 	})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if got != (Result{Key: "alt-t", Value: "/home/tester/dotfiles"}) {
+	if got != (Result{Key: "alt-t", Value: "/home/tester/workspace"}) {
 		t.Fatalf("Run() = %#v, want key+value result", got)
 	}
 }

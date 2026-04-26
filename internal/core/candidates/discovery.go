@@ -24,7 +24,6 @@ func Discover(inputs Inputs) ([]string, error) {
 	builder := orderedSet{}
 
 	builder.appendDir(inputs.HomeDir)
-	builder.appendDir(filepath.Join(cleanPath(inputs.HomeDir), "dotfiles"))
 
 	for _, pin := range inputs.Pins {
 		builder.appendDir(pin)

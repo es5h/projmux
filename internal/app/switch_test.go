@@ -26,18 +26,18 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 		switcher: &switchCommand{
 			discover: func(inputs candidates.Inputs) ([]string, error) {
 				gotInputs = inputs
-				return []string{"/home/tester", "/home/tester/dotfiles"}, nil
+				return []string{"/home/tester", "/home/tester/workspace"}, nil
 			},
 			pinStore: func() (switchPinStore, error) {
 				return &stubSwitchPinStore{list: []string{"/pins/app"}}, nil
 			},
 			runner: switchRunnerFunc(func(options intfzf.Options) (intfzf.Result, error) {
 				gotRunnerOptions = options
-				return intfzf.Result{Value: "/home/tester/dotfiles"}, nil
+				return intfzf.Result{Value: "/home/tester/workspace"}, nil
 			}),
 			sessions:   executor,
 			executable: func() (string, error) { return "/tmp/projmux", nil },
-			identity:   stubSwitchIdentityResolver{name: "dotfiles"},
+			identity:   stubSwitchIdentityResolver{name: "workspace"},
 			validate:   func(string) error { return nil },
 			homeDir:    func() (string, error) { return "/home/tester", nil },
 			workingDir: func() (string, error) { return "/rp/repo-a/nested", nil },
@@ -114,23 +114,23 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 	}; !equalStrings(got, want) {
 		t.Fatalf("runner bindings = %q, want %q", got, want)
 	}
-	if got, want := gotRunnerOptions.Candidates, []string{"/home/tester", "/home/tester/dotfiles", switchSettingsSentinel}; !equalStrings(got, want) {
+	if got, want := gotRunnerOptions.Candidates, []string{"/home/tester", "/home/tester/workspace", switchSettingsSentinel}; !equalStrings(got, want) {
 		t.Fatalf("runner candidates = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Entries, []intfzf.Entry{
 		{Label: "[ ]     \x1b[33m[New]\x1b[0m  tester  ~", Value: "/home/tester"},
-		{Label: "[ ]     \x1b[33m[New]\x1b[0m  dotfiles  ~/dotfiles", Value: "/home/tester/dotfiles"},
+		{Label: "[ ]     \x1b[33m[New]\x1b[0m  workspace  ~/workspace", Value: "/home/tester/workspace"},
 		{Label: "[ ]   \x1b[1m\x1b[36m[Settings]\x1b[0m        \x1b[2mmanage pinned directories\x1b[0m", Value: switchSettingsSentinel},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
 	}
-	if got, want := executor.ensureSessionName, "dotfiles"; got != want {
+	if got, want := executor.ensureSessionName, "workspace"; got != want {
 		t.Fatalf("ensure session = %q, want %q", got, want)
 	}
-	if got, want := executor.ensureCWD, "/home/tester/dotfiles"; got != want {
+	if got, want := executor.ensureCWD, "/home/tester/workspace"; got != want {
 		t.Fatalf("ensure cwd = %q, want %q", got, want)
 	}
-	if got, want := executor.openSessionName, "dotfiles"; got != want {
+	if got, want := executor.openSessionName, "workspace"; got != want {
 		t.Fatalf("open session = %q, want %q", got, want)
 	}
 }
@@ -356,7 +356,7 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
 	fixture := newSwitchFixture(t)
-	fixture.mkdir("home/dotfiles")
+	fixture.mkdir("home/workspace")
 	fixture.mkdir("pins/app")
 	fixture.mkdir("rp/repo-a")
 	fixture.mkdir("managed/work-a/nested")
@@ -404,7 +404,6 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 	}
 	wantCandidates := []string{
 		fixture.path("home"),
-		fixture.path("home/dotfiles"),
 		fixture.path("pins/app"),
 		fixture.path("managed/work-a"),
 		fixture.path("rp/repo-a"),
@@ -417,7 +416,6 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 	wantEntries := []intfzf.Entry{
 		{Label: "      home \x1b[2m~\x1b[0m", Value: fixture.path("home")},
 		{Label: "    \x1b[33m*\x1b[0m app \x1b[2m" + fixture.path("pins/app") + "\x1b[0m", Value: fixture.path("pins/app")},
-		{Label: "      dotfiles \x1b[2m~/dotfiles\x1b[0m", Value: fixture.path("home/dotfiles")},
 		{Label: "      repo-a \x1b[2m~rp/repo-a\x1b[0m", Value: fixture.path("rp/repo-a")},
 		{Label: "      work-a \x1b[2m" + fixture.path("managed/work-a") + "\x1b[0m", Value: fixture.path("managed/work-a")},
 		{Label: "      work-b \x1b[2m" + fixture.path("managed/work-b") + "\x1b[0m", Value: fixture.path("managed/work-b")},
@@ -438,7 +436,7 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 		"alt-1:abort",
 		"alt-2:abort",
 		"alt-3:abort",
-		"start:pos(5)",
+		"start:pos(4)",
 		"focus:execute-silent(exec '/tmp/projmux' 'switch' 'sidebar-focus' {2})",
 	}; !equalStrings(got, want) {
 		t.Fatalf("runner bindings = %q, want %q", got, want)
@@ -462,7 +460,7 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 
 func TestNewSwitchCommandInfersRepoRootFromHomeSourceRepos(t *testing.T) {
 	fixture := newSwitchFixture(t)
-	fixture.mkdir("home/dotfiles")
+	fixture.mkdir("home")
 	fixture.mkdir("home/source/repos/app/nested")
 	fixture.mkdir("home/source/repos/lib")
 
@@ -484,7 +482,6 @@ func TestNewSwitchCommandInfersRepoRootFromHomeSourceRepos(t *testing.T) {
 
 	wantCandidates := []string{
 		fixture.path("home"),
-		fixture.path("home/dotfiles"),
 		fixture.path("home/source/repos/app"),
 		fixture.path("home/source/repos/lib"),
 		fixture.path("home/source/repos"),
@@ -497,7 +494,6 @@ func TestNewSwitchCommandInfersRepoRootFromHomeSourceRepos(t *testing.T) {
 	wantEntries := []intfzf.Entry{
 		{Label: "      home \x1b[2m~\x1b[0m", Value: fixture.path("home")},
 		{Label: "      app \x1b[2m~rp/app\x1b[0m", Value: fixture.path("home/source/repos/app")},
-		{Label: "      dotfiles \x1b[2m~/dotfiles\x1b[0m", Value: fixture.path("home/dotfiles")},
 		{Label: "      lib \x1b[2m~rp/lib\x1b[0m", Value: fixture.path("home/source/repos/lib")},
 		{Label: "      repos \x1b[2m~rp\x1b[0m", Value: fixture.path("home/source/repos")},
 		{Label: "  \x1b[1m\x1b[36mSettings\x1b[0m  \x1b[2mmanage pinned directories\x1b[0m", Value: switchSettingsSentinel},
@@ -677,7 +673,7 @@ func TestSwitchCommandToggleTagUsesCurrentSnappedCandidate(t *testing.T) {
 	t.Parallel()
 
 	fixture := newSwitchFixture(t)
-	fixture.mkdir("home/dotfiles")
+	fixture.mkdir("home/workspace")
 	fixture.mkdir("managed/work-a/nested")
 
 	store := &capturingSwitchTagStore{tagged: true}
@@ -1442,7 +1438,7 @@ func TestSwitchCommandToggleTagSnapsExplicitPathToCandidate(t *testing.T) {
 	t.Parallel()
 
 	fixture := newSwitchFixture(t)
-	fixture.mkdir("home/dotfiles")
+	fixture.mkdir("home/workspace")
 	fixture.mkdir("managed/work-a/nested/deeper")
 
 	store := &capturingSwitchTagStore{tagged: false}
@@ -1515,7 +1511,7 @@ func TestSwitchCommandTogglePinSnapsExplicitPathToCandidate(t *testing.T) {
 	t.Parallel()
 
 	fixture := newSwitchFixture(t)
-	fixture.mkdir("home/dotfiles")
+	fixture.mkdir("home/workspace")
 	fixture.mkdir("managed/work-a/nested/deeper")
 
 	store := &stubSwitchPinStore{toggled: false}

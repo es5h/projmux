@@ -69,7 +69,7 @@
 
 ## Compatibility target
 
-The first implementation should preserve these user-facing flows from dotfiles:
+The first implementation should preserve these user-facing flows:
 - project directory chooser
 - existing-versus-new session labeling
 - preview window/pane cycling
