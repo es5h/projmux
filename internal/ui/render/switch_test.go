@@ -22,6 +22,15 @@ func TestBuildSwitchRowsFormatsSessionModeAndPath(t *testing.T) {
 	if got, want := rows[0].Value, "/home/tester/workspace"; got != want {
 		t.Fatalf("value = %q, want %q", got, want)
 	}
+	if got, want := rows[0].Item.Title, "workspace"; got != want {
+		t.Fatalf("item title = %q, want %q", got, want)
+	}
+	if got, want := rows[0].Item.EffectiveSearchText(), "workspace"; got != want {
+		t.Fatalf("item search text = %q, want %q", got, want)
+	}
+	if got, want := rows[0].Item.MetaLines, []string{"existing", "~/workspace"}; !equalStringSlices(got, want) {
+		t.Fatalf("item meta lines = %q, want %q", got, want)
+	}
 }
 
 func TestBuildSwitchRowsOmitsBlankMode(t *testing.T) {
@@ -121,6 +130,9 @@ func TestBuildSwitchRowsSidebarShowsAttentionBadge(t *testing.T) {
 	if got := rows[0].Label; got != want {
 		t.Fatalf("label = %q, want %q", got, want)
 	}
+	if got, want := rows[0].Item.Badges, []string{"needs review"}; !equalStringSlices(got, want) {
+		t.Fatalf("item badges = %q, want %q", got, want)
+	}
 }
 
 func TestBuildSwitchRowsSidebarFormatsSettingsRow(t *testing.T) {
@@ -136,4 +148,53 @@ func TestBuildSwitchRowsSidebarFormatsSettingsRow(t *testing.T) {
 	if got := rows[0].Label; got != want {
 		t.Fatalf("label = %q, want %q", got, want)
 	}
+	if got, want := rows[0].Item.Title, "Settings"; got != want {
+		t.Fatalf("item title = %q, want %q", got, want)
+	}
+	if got, want := rows[0].Item.Value, "__projmux_settings__"; got != want {
+		t.Fatalf("item value = %q, want %q", got, want)
+	}
+}
+
+func TestBuildSwitchPickerItemsReturnsBackendNeutralRows(t *testing.T) {
+	t.Parallel()
+
+	items := BuildSwitchPickerItems([]SwitchCandidate{{
+		Path:        "/home/tester/source/repos/app",
+		DisplayPath: "~rp/app",
+		DisplayName: "app",
+		SessionName: "repos-app",
+		ModeLabel:   "new",
+		Pinned:      true,
+		Tagged:      true,
+	}})
+
+	if len(items) != 1 {
+		t.Fatalf("item count = %d, want 1", len(items))
+	}
+	item := items[0]
+	if got, want := item.Title, "app"; got != want {
+		t.Fatalf("title = %q, want %q", got, want)
+	}
+	if got, want := item.Value, "/home/tester/source/repos/app"; got != want {
+		t.Fatalf("value = %q, want %q", got, want)
+	}
+	if got, want := item.MetaLines, []string{"new", "~rp/app"}; !equalStringSlices(got, want) {
+		t.Fatalf("meta lines = %q, want %q", got, want)
+	}
+	if got, want := item.Badges, []string{"tagged", "pinned"}; !equalStringSlices(got, want) {
+		t.Fatalf("badges = %q, want %q", got, want)
+	}
+}
+
+func equalStringSlices(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }

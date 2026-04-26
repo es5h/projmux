@@ -3,6 +3,8 @@ package render
 import (
 	"path/filepath"
 	"strings"
+
+	"github.com/es5h/projmux/internal/ui/picker"
 )
 
 const (
@@ -19,6 +21,7 @@ const (
 type SwitchRow struct {
 	Label string
 	Value string
+	Item  picker.Item
 }
 
 type SwitchCandidate struct {
@@ -70,9 +73,69 @@ func BuildSwitchRows(candidates []SwitchCandidate) []SwitchRow {
 		rows = append(rows, SwitchRow{
 			Label: formatSwitchLabel(candidate),
 			Value: candidate.Path,
+			Item:  switchPickerItem(candidate),
 		})
 	}
 	return rows
+}
+
+func BuildSwitchPickerItems(candidates []SwitchCandidate) []picker.Item {
+	items := make([]picker.Item, 0, len(candidates))
+	for _, candidate := range candidates {
+		items = append(items, switchPickerItem(candidate))
+	}
+	return items
+}
+
+func switchPickerItem(candidate SwitchCandidate) picker.Item {
+	title := sanitizeCell(candidate.DisplayName)
+	if title == "" {
+		title = sanitizeCell(candidate.SessionName)
+	}
+	if candidate.Path == "__projmux_settings__" {
+		title = sanitizeCell(candidate.DisplayPath)
+		if title == "" {
+			title = "Settings"
+		}
+	}
+
+	metaLines := make([]string, 0, 3)
+	if mode := sanitizeCell(candidate.ModeLabel); mode != "" {
+		metaLines = append(metaLines, mode)
+	}
+	if path := switchPickerPath(candidate); path != "" {
+		metaLines = append(metaLines, path)
+	}
+
+	badges := make([]string, 0, 3)
+	if candidate.AttentionRank == 2 {
+		badges = append(badges, "needs review")
+	} else if candidate.AttentionRank == 1 {
+		badges = append(badges, "ready")
+	}
+	if candidate.Tagged {
+		badges = append(badges, "tagged")
+	}
+	if candidate.Pinned {
+		badges = append(badges, "pinned")
+	}
+
+	return picker.Item{
+		Title:         title,
+		Value:         candidate.Path,
+		SearchText:    title,
+		MetaLines:     metaLines,
+		Badges:        badges,
+		PreviewTarget: candidate.Path,
+	}
+}
+
+func switchPickerPath(candidate SwitchCandidate) string {
+	path := sanitizeCell(candidate.DisplayPath)
+	if path == "" {
+		path = sanitizeCell(candidate.Path)
+	}
+	return path
 }
 
 func formatSwitchLabel(candidate SwitchCandidate) string {
