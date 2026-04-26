@@ -194,6 +194,17 @@ func TestAISplitCodexRunsNativeTmuxSplitAndStartsWatcher(t *testing.T) {
 	if !containsAICommandArgs(commands, "tmux", []string{"run-shell", "-b", "'/tmp/projmux' ai watch-title '%9'"}) {
 		t.Fatalf("commands = %#v, want codex watch-title run-shell", commands)
 	}
+	for _, want := range [][]string{
+		{"set-option", "-p", "-t", "%9", "@projmux_ai_managed", "1"},
+		{"set-option", "-p", "-t", "%9", "@projmux_ai_agent", "codex"},
+		{"set-option", "-p", "-t", "%9", "@projmux_ai_context", work},
+		{"set-option", "-p", "-t", "%9", "@projmux_ai_topic", "repo"},
+		{"set-option", "-p", "-t", "%9", "@projmux_ai_state", "idle"},
+	} {
+		if !containsAICommandArgs(commands, "tmux", want) {
+			t.Fatalf("commands = %#v, want AI pane metadata %v", commands, want)
+		}
+	}
 	if !containsAICommandArgSubstring(commands, "cd '"+work+"' && __codex_title='codex:repo'") {
 		t.Fatalf("commands = %#v, want codex launch command with context title", commands)
 	}
@@ -322,9 +333,9 @@ func TestAIStatusSetThinkingMarksPaneBusy(t *testing.T) {
 	}
 
 	want := []recordedAICommand{
+		{name: "tmux", args: []string{"set-option", "-p", "-t", "%1", "@projmux_ai_state", "thinking"}},
 		{name: "tmux", args: []string{"set-option", "-p", "-t", "%1", "@projmux_attention_state", "busy"}},
 		{name: "tmux", args: []string{"set-option", "-p", "-u", "-t", "%1", "@projmux_attention_ack"}},
-		{name: "tmux", args: []string{"select-pane", "-T", "⠹ codex: repo", "-t", "%1"}},
 	}
 	if !reflect.DeepEqual(cmdRecorder(cmd).commands, want) {
 		t.Fatalf("commands = %#v, want %#v", cmdRecorder(cmd).commands, want)
@@ -378,9 +389,9 @@ func TestAIStatusSetWaitingMarksPaneReplyAndNotifies(t *testing.T) {
 
 	commands := cmdRecorder(cmd).commands
 	wantPrefix := []recordedAICommand{
+		{name: "tmux", args: []string{"set-option", "-p", "-t", "%2", "@projmux_ai_state", "waiting"}},
 		{name: "tmux", args: []string{"set-option", "-p", "-t", "%2", "@projmux_attention_state", "reply"}},
 		{name: "tmux", args: []string{"set-option", "-p", "-u", "-t", "%2", "@projmux_attention_ack"}},
-		{name: "tmux", args: []string{"select-pane", "-T", "✳ Codex: approval needed", "-t", "%2"}},
 	}
 	if len(commands) < len(wantPrefix) || !reflect.DeepEqual(commands[:len(wantPrefix)], wantPrefix) {
 		t.Fatalf("command prefix = %#v, want %#v", commands, wantPrefix)
@@ -442,6 +453,55 @@ func TestAINotifySkipsRecentDuplicateButRefreshesRecord(t *testing.T) {
 	}
 }
 
+func TestAINotifyUsesPaneMetadataBeforeMutableTitle(t *testing.T) {
+	home := t.TempDir()
+	work := filepath.Join(home, "repo")
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := testAICommand(home)
+	cmd.now = func() time.Time { return time.Unix(1000, 0) }
+	cmd.readCommand = func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if name == "command" && reflect.DeepEqual(args, []string{"-v", "notify-send"}) {
+			return []byte("/usr/bin/notify-send\n"), nil
+		}
+		if name != "tmux" {
+			return nil, os.ErrNotExist
+		}
+		switch {
+		case len(args) == 5 && args[0] == "display-message" && args[3] == "%8" && strings.Contains(args[4], aiPaneAgentOption):
+			return []byte("renamed by agent__PROJMUX_TMUX_AI_SEP__claude__PROJMUX_TMUX_AI_SEP__" + work + "__PROJMUX_TMUX_AI_SEP__approval needed__PROJMUX_TMUX_AI_SEP__waiting__PROJMUX_TMUX_AI_SEP__reply__PROJMUX_TMUX_AI_SEP__\n"), nil
+		case reflect.DeepEqual(args, []string{"capture-pane", "-p", "-J", "-S", "-80", "-t", "%8"}):
+			return []byte("waiting for approval\n"), nil
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%8", "#{@projmux_desktop_notified}"}),
+			reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%8", "#{@projmux_desktop_notification_key}"}),
+			reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%8", "#{@projmux_desktop_notification_at}"}):
+			return []byte("\n"), nil
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%8", "#S"}):
+			return []byte("repo\n"), nil
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%8", "#W"}):
+			return []byte("dev\n"), nil
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%8", "#{pane_current_path}"}):
+			return []byte(work + "\n"), nil
+		}
+		return []byte("\n"), nil
+	}
+
+	if err := cmd.Run([]string{"notify", "notify", "%8"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run notify error = %v", err)
+	}
+
+	commands := cmdRecorder(cmd).commands
+	if !containsAICommandArgs(commands, "notify-send", []string{
+		"--app-name=projmux.TmuxCodex",
+		"--icon=dialog-information",
+		"--urgency=critical",
+		"Claude 승인 필요 · approval needed",
+	}) {
+		t.Fatalf("commands = %#v, want metadata-derived Claude approval notification", commands)
+	}
+}
+
 func TestAIWatchTitlePromotesBusyPaneToThinking(t *testing.T) {
 	home := t.TempDir()
 	cmd := testAICommand(home)
@@ -471,6 +531,45 @@ func TestAIWatchTitlePromotesBusyPaneToThinking(t *testing.T) {
 
 	if !containsAICommandArg(cmdRecorder(cmd).commands, "busy") {
 		t.Fatalf("commands = %#v, want busy attention state", cmdRecorder(cmd).commands)
+	}
+}
+
+func TestAIWatchTitleUsesCapturePaneAsReplySignal(t *testing.T) {
+	home := t.TempDir()
+	cmd := testAICommand(home)
+	checks := 0
+	cmd.readCommand = func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if name == "command" && reflect.DeepEqual(args, []string{"-v", "notify-send"}) {
+			return []byte("/usr/bin/notify-send\n"), nil
+		}
+		if name != "tmux" {
+			return nil, os.ErrNotExist
+		}
+		switch {
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%10", "#{pane_id}"}):
+			checks++
+			if checks > 1 {
+				return nil, os.ErrNotExist
+			}
+			return []byte("%10\n"), nil
+		case len(args) == 5 && args[0] == "display-message" && args[3] == "%10" && strings.Contains(args[4], aiPaneAgentOption):
+			return []byte("codexcli__PROJMUX_TMUX_AI_SEP__codex__PROJMUX_TMUX_AI_SEP____PROJMUX_TMUX_AI_SEP____PROJMUX_TMUX_AI_SEP__thinking__PROJMUX_TMUX_AI_SEP__busy__PROJMUX_TMUX_AI_SEP__\n"), nil
+		case reflect.DeepEqual(args, []string{"capture-pane", "-p", "-J", "-S", "-80", "-t", "%10"}):
+			return []byte("waiting for input\n"), nil
+		}
+		return []byte("\n"), nil
+	}
+
+	if err := cmd.Run([]string{"watch-title", "%10"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run watch-title error = %v", err)
+	}
+
+	commands := cmdRecorder(cmd).commands
+	if !containsAICommandArgs(commands, "tmux", []string{"set-option", "-p", "-t", "%10", "@projmux_ai_topic", "waiting for input"}) {
+		t.Fatalf("commands = %#v, want capture-derived AI topic", commands)
+	}
+	if !containsAICommandArgs(commands, "tmux", []string{"set-option", "-p", "-t", "%10", "@projmux_ai_state", "waiting"}) {
+		t.Fatalf("commands = %#v, want waiting AI state from capture", commands)
 	}
 }
 
@@ -523,8 +622,11 @@ func TestAIWatchTitleSettledBusyReturnsIdleWithoutNotification(t *testing.T) {
 	}
 
 	commands := cmdRecorder(cmd).commands
-	if !containsAICommandArgs(commands, "tmux", []string{"select-pane", "-T", "repo", "-t", "%6"}) {
-		t.Fatalf("commands = %#v, want idle title restore", commands)
+	if !containsAICommandArgs(commands, "tmux", []string{"set-option", "-p", "-t", "%6", "@projmux_ai_state", "idle"}) {
+		t.Fatalf("commands = %#v, want idle ai pane state", commands)
+	}
+	if !containsAICommandArgs(commands, "tmux", []string{"set-option", "-p", "-u", "-t", "%6", "@projmux_attention_state"}) {
+		t.Fatalf("commands = %#v, want cleared attention state", commands)
 	}
 	if containsAICommand(commands, "notify-send") {
 		t.Fatalf("commands = %#v, did not expect notify-send after settled busy", commands)

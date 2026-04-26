@@ -25,6 +25,12 @@ const (
 	aiModeClaude    = "claude"
 	aiModeCodex     = "codex"
 	aiModeShell     = "shell"
+
+	aiPaneManagedOption = "@projmux_ai_managed"
+	aiPaneAgentOption   = "@projmux_ai_agent"
+	aiPaneContextOption = "@projmux_ai_context"
+	aiPaneStateOption   = "@projmux_ai_state"
+	aiPaneTopicOption   = "@projmux_ai_topic"
 )
 
 type aiCommandRunner interface {
@@ -114,21 +120,19 @@ func (c *aiCommand) applyAIStatus(state, paneID string) error {
 		return nil
 	}
 
-	currentTitle := c.readTrimmed("tmux", "display-message", "-p", "-t", paneID, "#{pane_title}")
-	baseTitle := trimAIStatePrefix(currentTitle)
 	switch strings.TrimSpace(state) {
 	case "thinking":
+		_ = c.run("tmux", "set-option", "-p", "-t", paneID, aiPaneStateOption, "thinking")
 		_ = c.run("tmux", "set-option", "-p", "-t", paneID, attentionStateOption, attentionStateBusy)
 		_ = c.run("tmux", "set-option", "-p", "-u", "-t", paneID, attentionAckOption)
-		_ = c.run("tmux", "select-pane", "-T", "⠹ "+baseTitle, "-t", paneID)
 	case "waiting":
+		_ = c.run("tmux", "set-option", "-p", "-t", paneID, aiPaneStateOption, "waiting")
 		_ = c.run("tmux", "set-option", "-p", "-t", paneID, attentionStateOption, attentionStateReply)
 		_ = c.run("tmux", "set-option", "-p", "-u", "-t", paneID, attentionAckOption)
-		_ = c.run("tmux", "select-pane", "-T", "✳ "+baseTitle, "-t", paneID)
 		_ = c.notifyAI(paneID)
 	case "idle", "":
+		_ = c.run("tmux", "set-option", "-p", "-t", paneID, aiPaneStateOption, "idle")
 		_ = c.run("tmux", "set-option", "-p", "-u", "-t", paneID, attentionStateOption)
-		_ = c.run("tmux", "select-pane", "-T", baseTitle, "-t", paneID)
 	default:
 		return fmt.Errorf("unknown ai status state: %s", state)
 	}
@@ -173,6 +177,8 @@ func (c *aiCommand) resetAINotification(paneID string) error {
 		return nil
 	}
 	_ = c.run("tmux", "set-option", "-p", "-u", "-t", paneID, "@projmux_desktop_notified")
+	_ = c.run("tmux", "set-option", "-p", "-u", "-t", paneID, "@projmux_desktop_notification_key")
+	_ = c.run("tmux", "set-option", "-p", "-u", "-t", paneID, "@projmux_desktop_notification_at")
 	return nil
 }
 
@@ -181,18 +187,21 @@ func (c *aiCommand) notifyAI(paneID string) error {
 	if paneID == "" {
 		return nil
 	}
-	if c.readTmuxPaneOption(paneID, "@projmux_desktop_notified") == "1" {
-		return nil
-	}
-
-	paneTitle := c.readTrimmed("tmux", "display-message", "-p", "-t", paneID, "#{pane_title}")
+	info := c.readAIPaneInfo(paneID)
 	sessionName := c.readTrimmed("tmux", "display-message", "-p", "-t", paneID, "#S")
 	windowName := c.readTrimmed("tmux", "display-message", "-p", "-t", paneID, "#W")
 	panePath := c.readTrimmed("tmux", "display-message", "-p", "-t", paneID, "#{pane_current_path}")
-	agentName := aiAgentDisplayName(paneTitle)
-	cleanTitle := displayAITopic(paneTitle)
-	replyKind := aiReplyKindForTitle(paneTitle)
-	key := aiNotificationKey(replyKind, paneTitle)
+	agentName := aiAgentDisplayName(info.agent)
+	if agentName == "AI" {
+		agentName = aiAgentDisplayName(info.title)
+	}
+	cleanTitle := info.topic
+	if cleanTitle == "" {
+		cleanTitle = displayAITopic(info.title)
+	}
+	replyEvidence := strings.Join([]string{info.topic, info.title, info.capture}, "\n")
+	replyKind := aiReplyKindForTitle(replyEvidence)
+	key := aiNotificationKey(replyKind, defaultString(cleanTitle, info.title))
 	if c.duplicateAINotificationRecent(paneID, key) {
 		c.recordAINotification(paneID, key)
 		return nil
@@ -229,14 +238,15 @@ func (c *aiCommand) runWatchTitle(args []string, stderr io.Writer) error {
 		if _, err := c.read("tmux", "display-message", "-p", "-t", paneID, "#{pane_id}"); err != nil {
 			return nil
 		}
-		title, state, ack := c.readAIWatchSnapshot(paneID)
+		snapshot := c.readAIWatchSnapshot(paneID)
 		nextState := "idle"
+		evidence := strings.Join([]string{snapshot.title, snapshot.capture}, "\n")
 		switch {
-		case isAIBusyTitle(title):
+		case isAIBusyTitle(evidence):
 			phase = "busy"
 			settleCount = 0
 			nextState = "thinking"
-		case ack != "1" && isAIReplyTitle(title):
+		case snapshot.ack != "1" && isAIReplyTitle(evidence):
 			phase = "replied"
 			settleCount = 0
 			nextState = "waiting"
@@ -248,14 +258,17 @@ func (c *aiCommand) runWatchTitle(args []string, stderr io.Writer) error {
 			} else {
 				nextState = "thinking"
 			}
-		case phase == "replied" && ack != "1":
+		case phase == "replied" && snapshot.ack != "1":
 			settleCount = 0
 			nextState = "waiting"
 		default:
 			settleCount = 0
 		}
 
-		if nextState != lastState || aiAttentionMismatch(nextState, state) {
+		if nextState == "waiting" {
+			c.recordAITopic(paneID, bestAITopic(snapshot.title, snapshot.capture))
+		}
+		if nextState != lastState || aiAttentionMismatch(nextState, snapshot.attentionState) || snapshot.aiState != nextState {
 			_ = c.applyAIStatus(nextState, paneID)
 			lastState = nextState
 		}
@@ -546,10 +559,10 @@ func (c *aiCommand) runAgentSplit(mode, direction string) error {
 	if err != nil {
 		return err
 	}
+	paneID := strings.TrimSpace(string(out))
+	c.configureAIPane(paneID, mode, contextDir, title)
 	c.applySplitLayout(targetPane, direction)
-	if mode == aiModeCodex {
-		c.startAIWatchTitle(strings.TrimSpace(string(out)))
-	}
+	c.startAIWatchTitle(paneID)
 	return nil
 }
 
@@ -818,6 +831,18 @@ func (c *aiCommand) agentLaunchCommand(mode, agentBin, contextDir, title string)
 	return strings.Join(parts, " && ")
 }
 
+func (c *aiCommand) configureAIPane(paneID, mode, contextDir, title string) {
+	paneID = strings.TrimSpace(paneID)
+	if paneID == "" {
+		return
+	}
+	_ = c.run("tmux", "set-option", "-p", "-t", paneID, aiPaneManagedOption, "1")
+	_ = c.run("tmux", "set-option", "-p", "-t", paneID, aiPaneAgentOption, normalizeAIMode(mode))
+	_ = c.run("tmux", "set-option", "-p", "-t", paneID, aiPaneContextOption, strings.TrimSpace(contextDir))
+	_ = c.run("tmux", "set-option", "-p", "-t", paneID, aiPaneTopicOption, displayAITopic(title))
+	_ = c.run("tmux", "set-option", "-p", "-t", paneID, aiPaneStateOption, "idle")
+}
+
 func (c *aiCommand) startAIWatchTitle(paneID string) {
 	if strings.TrimSpace(paneID) == "" {
 		return
@@ -1018,15 +1043,89 @@ func (c *aiCommand) gitBranchForPath(path string) string {
 	return c.readTrimmed("git", "-C", path, "rev-parse", "--short", "HEAD")
 }
 
-func (c *aiCommand) readAIWatchSnapshot(paneID string) (title, state, ack string) {
+type aiPaneInfo struct {
+	title          string
+	agent          string
+	context        string
+	topic          string
+	aiState        string
+	attentionState string
+	ack            string
+	capture        string
+}
+
+func (c *aiCommand) readAIPaneInfo(paneID string) aiPaneInfo {
+	const delim = "__PROJMUX_TMUX_AI_SEP__"
+	format := strings.Join([]string{
+		"#{pane_title}",
+		"#{" + aiPaneAgentOption + "}",
+		"#{" + aiPaneContextOption + "}",
+		"#{" + aiPaneTopicOption + "}",
+		"#{" + aiPaneStateOption + "}",
+		"#{" + attentionStateOption + "}",
+		"#{" + attentionAckOption + "}",
+	}, delim)
+	snapshot := c.readTrimmed("tmux", "display-message", "-p", "-t", paneID, format)
+	fields := strings.Split(snapshot, delim)
+	info := aiPaneInfo{}
+	if len(fields) > 0 {
+		info.title = strings.TrimSpace(fields[0])
+	}
+	if len(fields) > 1 {
+		info.agent = strings.TrimSpace(fields[1])
+	}
+	if len(fields) > 2 {
+		info.context = strings.TrimSpace(fields[2])
+	}
+	if len(fields) > 3 {
+		info.topic = strings.TrimSpace(fields[3])
+	}
+	if len(fields) > 4 {
+		info.aiState = strings.TrimSpace(fields[4])
+	}
+	if len(fields) > 5 {
+		info.attentionState = strings.TrimSpace(fields[5])
+	}
+	if len(fields) > 6 {
+		info.ack = strings.TrimSpace(fields[6])
+	}
+	if info.title == "" {
+		info.title = c.readTrimmed("tmux", "display-message", "-p", "-t", paneID, "#{pane_title}")
+	}
+	info.capture = c.readAIPaneCapture(paneID)
+	return info
+}
+
+func (c *aiCommand) readAIWatchSnapshot(paneID string) aiPaneInfo {
+	info := c.readAIPaneInfo(paneID)
+	if info.title != "" || info.agent != "" || info.topic != "" || info.aiState != "" || info.attentionState != "" || info.ack != "" {
+		return info
+	}
+
 	const delim = "__PROJMUX_TMUX_AI_SEP__"
 	snapshot := c.readTrimmed("tmux", "display-message", "-p", "-t", paneID, "#{pane_title}"+delim+"#{"+attentionStateOption+"}"+delim+"#{"+attentionAckOption+"}")
 	title, rest, ok := strings.Cut(snapshot, delim)
 	if !ok {
-		return snapshot, "", ""
+		info.title = snapshot
+		return info
 	}
-	state, ack, _ = strings.Cut(rest, delim)
-	return title, state, ack
+	info.title = strings.TrimSpace(title)
+	info.attentionState, info.ack, _ = strings.Cut(rest, delim)
+	info.attentionState = strings.TrimSpace(info.attentionState)
+	info.ack = strings.TrimSpace(info.ack)
+	return info
+}
+
+func (c *aiCommand) readAIPaneCapture(paneID string) string {
+	return c.readTrimmed("tmux", "capture-pane", "-p", "-J", "-S", "-80", "-t", paneID)
+}
+
+func (c *aiCommand) recordAITopic(paneID, topic string) {
+	topic = strings.TrimSpace(topic)
+	if paneID == "" || topic == "" {
+		return
+	}
+	_ = c.run("tmux", "set-option", "-p", "-t", paneID, aiPaneTopicOption, topic)
 }
 
 func (c *aiCommand) watchInterval() time.Duration {
@@ -1116,6 +1215,32 @@ func displayAITopic(title string) string {
 		topic = strings.TrimPrefix(topic, prefix)
 	}
 	return strings.TrimSpace(topic)
+}
+
+func bestAITopic(title, capture string) string {
+	if topic := displayAITopic(title); topic != "" && !isGenericAITopic(topic) {
+		return topic
+	}
+	for line := range strings.SplitSeq(capture, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || isGenericAITopic(line) {
+			continue
+		}
+		if isAIReplyTitle(line) {
+			return displayAITopic(line)
+		}
+	}
+	return displayAITopic(title)
+}
+
+func isGenericAITopic(value string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case "", "codex", "codexcli", "claude", "ai", "thinking", "running", "working", "waiting", "idle", "done", "complete", "completed":
+		return true
+	default:
+		return false
+	}
 }
 
 func aiReplyKindForTitle(title string) string {
