@@ -160,9 +160,11 @@ func TestSettingsHubShowsAboutSection(t *testing.T) {
 		"projmux dev",
 		"https://github.com/es5h/projmux",
 		"go install github.com/es5h/projmux/cmd/projmux@latest",
-		"Alt-1 sidebar",
-		"Alt-4 AI picker",
-		"Ctrl-n new",
+		"sidebar, sessions, projects",
+		"new window, rename window",
+		"set these in Ghostty",
+		"Windows Term.",
+		"tmux receives projmux actions",
 		"docs/keybindings.md",
 	} {
 		if !hasEntryLabelContaining(aboutOptions.Entries, want) {

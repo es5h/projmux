@@ -413,19 +413,27 @@ func settingsAboutEntries() []intfzf.Entry {
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Main keys      Alt-1 sidebar, Alt-2 sessions, Alt-3 projects",
+			Label: "Actions        sidebar, sessions, projects, AI picker, settings",
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "AI/settings    Alt-4 AI picker, Alt-5 settings",
+			Label: "Window actions new window, rename window, previous/next window",
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Window keys    Ctrl-n new, Alt-r rename, Alt-Shift arrows switch",
+			Label: "Terminal keys  set these in Ghostty, Windows Terminal, or your terminal",
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "More keys      see docs/keybindings.md for Ghostty and Windows Terminal",
+			Label: "Ghostty        example config in docs/keybindings.md",
+			Value: settingsNoopValue,
+		},
+		{
+			Label: "Windows Term.  sendInput examples in docs/keybindings.md",
+			Value: settingsNoopValue,
+		},
+		{
+			Label: "Details        tmux receives projmux actions through generated app bindings",
 			Value: settingsNoopValue,
 		},
 	}
