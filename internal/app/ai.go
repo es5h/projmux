@@ -1397,7 +1397,7 @@ func aiProjectName(path string) string {
 	return project
 }
 
-func aiNotificationBody(project, branch, sessionName, windowName, paneID string) string {
+func aiNotificationBody(project, branch, sessionName, windowName, _ string) string {
 	projectPart := ""
 	switch {
 	case project != "" && branch != "":
@@ -1410,13 +1410,6 @@ func aiNotificationBody(project, branch, sessionName, windowName, paneID string)
 	location := ""
 	if sessionName != "" || windowName != "" {
 		location = sessionName + ":" + windowName
-	}
-	if paneID != "" {
-		if location != "" {
-			location += " · " + paneID
-		} else {
-			location = paneID
-		}
 	}
 	switch {
 	case projectPart != "" && location != "":
