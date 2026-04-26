@@ -413,27 +413,27 @@ func settingsAboutEntries() []intfzf.Entry {
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Actions        sidebar, sessions, projects, AI picker, settings",
+			Label: "App            sidebar, sessions, projects, AI picker, settings",
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Window actions new window, rename window, previous/next window",
+			Label: "Tmux actions   new window, rename window, previous/next window",
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Terminal keys  set these in Ghostty, Windows Terminal, or your terminal",
+			Label: "Key model      terminal sends CSI-u keys; tmux runs projmux actions",
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Ghostty        example config in docs/keybindings.md",
+			Label: "Ghostty        bind alt/ctrl keys to csi:9001u..9011u",
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Windows Term.  sendInput examples in docs/keybindings.md",
+			Label: "Windows Term.  bind keys with sendInput \\u001b[9001u..9011u",
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Details        tmux receives projmux actions through generated app bindings",
+			Label: "Docs           docs/keybindings.md has copyable terminal examples",
 			Value: settingsNoopValue,
 		},
 	}

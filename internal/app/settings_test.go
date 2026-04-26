@@ -162,9 +162,9 @@ func TestSettingsHubShowsAboutSection(t *testing.T) {
 		"go install github.com/es5h/projmux/cmd/projmux@latest",
 		"sidebar, sessions, projects",
 		"new window, rename window",
-		"set these in Ghostty",
-		"Windows Term.",
-		"tmux receives projmux actions",
+		"terminal sends CSI-u keys",
+		"bind alt/ctrl keys",
+		"sendInput",
 		"docs/keybindings.md",
 	} {
 		if !hasEntryLabelContaining(aboutOptions.Entries, want) {
