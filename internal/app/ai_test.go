@@ -612,6 +612,45 @@ func TestAIWatchTitleBootstrapsMetadataForExistingCodexPane(t *testing.T) {
 	}
 }
 
+func TestAIWatchTitleKeepsWaitingUntilFocusAck(t *testing.T) {
+	home := t.TempDir()
+	cmd := testAICommand(home)
+	checks := 0
+	cmd.readCommand = func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if name == "command" && reflect.DeepEqual(args, []string{"-v", "notify-send"}) {
+			return []byte("/usr/bin/notify-send\n"), nil
+		}
+		if name != "tmux" {
+			return nil, os.ErrNotExist
+		}
+		switch {
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%12", "#{pane_id}"}):
+			checks++
+			if checks > 1 {
+				return nil, os.ErrNotExist
+			}
+			return []byte("%12\n"), nil
+		case len(args) == 5 && args[0] == "display-message" && args[3] == "%12" && strings.Contains(args[4], aiPaneAgentOption):
+			return []byte("codexcli__PROJMUX_TMUX_AI_SEP__node__PROJMUX_TMUX_AI_SEP__" + home + "__PROJMUX_TMUX_AI_SEP__codex__PROJMUX_TMUX_AI_SEP__" + home + "__PROJMUX_TMUX_AI_SEP__repo__PROJMUX_TMUX_AI_SEP__waiting__PROJMUX_TMUX_AI_SEP__reply__PROJMUX_TMUX_AI_SEP__\n"), nil
+		case reflect.DeepEqual(args, []string{"capture-pane", "-p", "-J", "-S", "-80", "-t", "%12"}):
+			return []byte("plain idle screen\n"), nil
+		}
+		return []byte("\n"), nil
+	}
+
+	if err := cmd.Run([]string{"watch-title", "%12"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run watch-title error = %v", err)
+	}
+
+	commands := cmdRecorder(cmd).commands
+	if containsAICommandArgs(commands, "tmux", []string{"set-option", "-p", "-t", "%12", "@projmux_ai_state", "idle"}) {
+		t.Fatalf("commands = %#v, did not expect watcher to clear waiting state", commands)
+	}
+	if containsAICommandArgs(commands, "tmux", []string{"set-option", "-p", "-u", "-t", "%12", "@projmux_attention_state"}) {
+		t.Fatalf("commands = %#v, did not expect watcher to clear reply attention", commands)
+	}
+}
+
 func TestAIWatchTitleSettledBusyReturnsIdleWithoutNotification(t *testing.T) {
 	home := t.TempDir()
 	cmd := testAICommand(home)

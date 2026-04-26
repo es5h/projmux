@@ -251,6 +251,10 @@ func (c *aiCommand) runWatchTitle(args []string, stderr io.Writer) error {
 			phase = "replied"
 			settleCount = 0
 			nextState = "waiting"
+		case snapshot.ack != "1" && (snapshot.aiState == "waiting" || snapshot.attentionState == attentionStateReply):
+			phase = "replied"
+			settleCount = 0
+			nextState = "waiting"
 		case phase == "busy":
 			settleCount++
 			if settleCount >= settleLimit {
