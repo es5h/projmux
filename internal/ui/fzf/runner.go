@@ -25,8 +25,9 @@ type Options struct {
 }
 
 type Entry struct {
-	Label string
-	Value string
+	Label     string
+	Value     string
+	SearchKey string
 }
 
 type Result struct {
@@ -94,6 +95,7 @@ func (r *runner) Run(options Options) (Result, error) {
 }
 
 func runnerArgs(options Options, supportsFooter bool) []string {
+	searchKeyed := hasSearchKey(options)
 	args := []string{
 		"--prompt", resolvedPrompt(options),
 		"--height", "100%",
@@ -101,11 +103,17 @@ func runnerArgs(options Options, supportsFooter bool) []string {
 		"--border",
 		"--ansi",
 		"--delimiter", "\t",
-		"--with-nth", "1",
+	}
+	if searchKeyed {
+		args = append(args, "--nth", "1", "--with-nth", "2")
+	} else {
+		args = append(args, "--with-nth", "1")
+	}
+	args = append(args,
 		"--exit-0",
 		"--scrollbar", "█",
 		"--info", "inline-right",
-	}
+	)
 	if options.Read0 {
 		args = append(args,
 			"--read0",
@@ -176,8 +184,17 @@ func renderedInput(options Options) string {
 
 func renderedEntries(options Options) []string {
 	if len(options.Entries) != 0 {
+		searchKeyed := hasSearchKey(options)
 		lines := make([]string, 0, len(options.Entries))
 		for _, entry := range options.Entries {
+			if searchKeyed {
+				searchKey := strings.TrimSpace(entry.SearchKey)
+				if searchKey == "" {
+					searchKey = firstLine(entry.Label)
+				}
+				lines = append(lines, searchKey+"\t"+entry.Label+"\t"+entry.Value)
+				continue
+			}
 			lines = append(lines, entry.Label+"\t"+entry.Value)
 		}
 		return lines
@@ -224,9 +241,25 @@ func cutExpectedKey(selection string, expectKeys []string) (string, string, bool
 }
 
 func selectedValue(selection string) string {
-	_, value, ok := strings.Cut(selection, "\t")
-	if !ok {
-		return selection
+	if idx := strings.LastIndex(selection, "\t"); idx >= 0 {
+		return selection[idx+1:]
+	}
+	return selection
+}
+
+func hasSearchKey(options Options) bool {
+	for _, entry := range options.Entries {
+		if strings.TrimSpace(entry.SearchKey) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func firstLine(value string) string {
+	value = strings.TrimSpace(value)
+	if before, _, ok := strings.Cut(value, "\n"); ok {
+		return strings.TrimSpace(before)
 	}
 	return value
 }

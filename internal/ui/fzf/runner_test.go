@@ -184,6 +184,61 @@ func TestRunnerRunSupportsRead0MultilineEntries(t *testing.T) {
 	}
 }
 
+func TestRunnerRunSupportsSearchKeyedEntries(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCommand{stdout: "workspace\tworkspace\n  ~/workspace\t/home/tester/workspace\x00"}
+
+	r := &runner{
+		lookupPath:     func(string) (string, error) { return "/usr/bin/fzf", nil },
+		supportsFooter: func(string) bool { return true },
+		newCommand: func(name string, args ...string) command {
+			want := []string{
+				"--prompt", "projmux popup> ",
+				"--height", "100%",
+				"--layout", "reverse",
+				"--border",
+				"--ansi",
+				"--delimiter", "\t",
+				"--nth", "1",
+				"--with-nth", "2",
+				"--exit-0",
+				"--scrollbar", "█",
+				"--info", "inline-right",
+				"--read0",
+				"--print0",
+				"--highlight-line",
+				"--gap",
+				"--gap-line", "─",
+				"--pointer", "▌",
+				"--marker-multi-line", "┃┃┃",
+				"--color", "current-bg:#263238,current-fg:#ffffff,current-hl:#ffcc66,selected-bg:#1f292d,gutter:#263238,pointer:#e12672,marker:#e12672",
+			}
+			if got := args; !equalStrings(got, want) {
+				t.Fatalf("command args = %q, want %q", got, want)
+			}
+			return fake
+		},
+	}
+
+	got, err := r.Run(Options{
+		UI:    "popup",
+		Read0: true,
+		Entries: []Entry{
+			{SearchKey: "workspace", Label: "workspace\n  ~/workspace", Value: "/home/tester/workspace"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got != (Result{Value: "/home/tester/workspace"}) {
+		t.Fatalf("Run() = %#v, want hidden value", got)
+	}
+	if got, want := fake.stdin.String(), "workspace\tworkspace\n  ~/workspace\t/home/tester/workspace"; got != want {
+		t.Fatalf("stdin = %q, want %q", got, want)
+	}
+}
+
 func TestRunnerRunSupportsRead0ExpectedKeyWithNULSeparator(t *testing.T) {
 	t.Parallel()
 

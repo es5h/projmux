@@ -201,8 +201,6 @@ func (c *switchCommand) Run(args []string, stdout, stderr io.Writer) error {
 			return c.runCycleWindow(args[1:], stderr)
 		case "sidebar-focus":
 			return c.runSidebarFocus(args[1:], stdout, stderr)
-		case "sidebar-help":
-			return c.runSidebarHelp(args[1:], stdout, stderr)
 		}
 	}
 
@@ -1136,22 +1134,6 @@ func (c *switchCommand) runSidebarFocus(args []string, _ io.Writer, stderr io.Wr
 	return nil
 }
 
-func (c *switchCommand) runSidebarHelp(args []string, stdout, stderr io.Writer) error {
-	if len(args) != 0 {
-		printSwitchUsage(stderr)
-		return fmt.Errorf("switch sidebar-help does not accept arguments")
-	}
-
-	fmt.Fprintln(stdout, "Sessionizer keys")
-	fmt.Fprintln(stdout, "")
-	fmt.Fprintln(stdout, "Enter   switch/create")
-	fmt.Fprintln(stdout, "Ctrl-X  kill focused session")
-	fmt.Fprintln(stdout, "Alt-P   pin/unpin focused directory")
-	fmt.Fprintln(stdout, "Ctrl-H  show this help")
-	fmt.Fprintln(stdout, "Esc     close")
-	return nil
-}
-
 func (c *switchCommand) runPicker(plan switchPlan) (intfzf.Result, error) {
 	if c.runner == nil {
 		return intfzf.Result{}, fmt.Errorf("switch runner is not configured")
@@ -1216,11 +1198,6 @@ func (c *switchCommand) switchPickerSurface(plan switchPlan) (string, []string, 
 
 	bindings := pickerCloseBindings()
 	if plan.UI == switchUISidebar {
-		helpCommand, err := inttmux.BuildSwitchSidebarHelpPopupCommand(binaryPath)
-		if err != nil {
-			return "", nil, fmt.Errorf("build switch sidebar help command: %w", err)
-		}
-		bindings = append(bindings, "ctrl-h:execute-silent("+helpCommand+")")
 		if pos := switchSidebarInitialPos(plan); pos > 0 {
 			bindings = append(bindings, fmt.Sprintf("start:pos(%d)", pos))
 		}
@@ -1260,7 +1237,7 @@ func switchPreviewWindow(ui string) string {
 
 func switchPickerFooter(ui string) string {
 	if ui == switchUISidebar {
-		return projmuxFooter("Enter: switch/create | C-x: kill | M-p: pin | C-h: help")
+		return projmuxFooter("C-x: kill | M-p: pin")
 	}
 	return projmuxFooter(strings.Join([]string{
 		"Enter: switch to previewed target",
@@ -1515,8 +1492,9 @@ func (c *switchCommand) renderRows(ctx context.Context, ui string, candidatePath
 	entries := make([]intfzf.Entry, 0, len(rows))
 	for _, row := range rows {
 		entries = append(entries, intfzf.Entry{
-			Label: intrender.FormatSwitchCardLabel(row.Item),
-			Value: row.Value,
+			Label:     intrender.FormatSwitchCardLabel(row.Item),
+			Value:     row.Value,
+			SearchKey: row.Item.EffectiveSearchText(),
 		})
 	}
 
