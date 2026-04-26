@@ -1249,7 +1249,7 @@ func switchPickerFooter(ui string) string {
 		}, "\n"))
 	}
 	return projmuxFooter(strings.Join([]string{
-		"Enter: switch/create previewed target",
+		"Enter: switch to previewed target",
 		"Ctrl-X: kill focused session",
 		"Alt-P: pin/unpin focused directory",
 		"Left/Right: preview window",
@@ -1481,6 +1481,9 @@ func (c *switchCommand) renderRows(ctx context.Context, ui string, candidatePath
 			} else {
 				modeLabel = "new"
 			}
+		}
+		if ui == switchUIPopup && modeLabel == "new" {
+			continue
 		}
 
 		renderCandidates = append(renderCandidates, intrender.SwitchCandidate{

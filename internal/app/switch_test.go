@@ -20,7 +20,9 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 
 	var gotInputs candidates.Inputs
 	var gotRunnerOptions intfzf.Options
-	executor := &capturingSwitchSessionExecutor{}
+	executor := &capturingSwitchSessionExecutor{
+		exists: map[string]bool{"workspace": true},
+	}
 
 	app := &App{
 		switcher: &switchCommand{
@@ -37,7 +39,16 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 			}),
 			sessions:   executor,
 			executable: func() (string, error) { return "/tmp/projmux", nil },
-			identity:   stubSwitchIdentityResolver{name: "workspace"},
+			identity: switchIdentityResolverFunc(func(path string) (string, error) {
+				switch path {
+				case "/home/tester/workspace":
+					return "workspace", nil
+				case "/home/tester":
+					return "tester", nil
+				default:
+					return "", errors.New("unexpected path")
+				}
+			}),
 			validate:   func(string) error { return nil },
 			homeDir:    func() (string, error) { return "/home/tester", nil },
 			workingDir: func() (string, error) { return "/rp/repo-a/nested", nil },
@@ -92,7 +103,7 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 	if got, want := gotRunnerOptions.Prompt, "› "; got != want {
 		t.Fatalf("runner prompt = %q, want %q", got, want)
 	}
-	if got, want := gotRunnerOptions.Footer, "[projmux]\nEnter: switch/create previewed target\nCtrl-X: kill focused session\nAlt-P: pin/unpin focused directory\nLeft/Right: preview window\nAlt-Up/Alt-Down: preview pane"; got != want {
+	if got, want := gotRunnerOptions.Footer, "[projmux]\nEnter: switch to previewed target\nCtrl-X: kill focused session\nAlt-P: pin/unpin focused directory\nLeft/Right: preview window\nAlt-Up/Alt-Down: preview pane"; got != want {
 		t.Fatalf("runner footer = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.PreviewCommand, "exec '/tmp/projmux' 'switch' 'preview' '--ui=popup' {2}"; got != want {
@@ -118,8 +129,7 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 		t.Fatalf("runner candidates = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Entries, []intfzf.Entry{
-		{Label: "[ ]     \x1b[33m[New]\x1b[0m  tester  ~", Value: "/home/tester"},
-		{Label: "[ ]     \x1b[33m[New]\x1b[0m  workspace  ~/workspace", Value: "/home/tester/workspace"},
+		{Label: "[ ]     \x1b[32m[Existing]\x1b[0m  workspace  ~/workspace", Value: "/home/tester/workspace"},
 		{Label: "[ ]   \x1b[1m\x1b[36m[Settings]\x1b[0m        \x1b[2mmanage pinned directories\x1b[0m", Value: switchSettingsSentinel},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
@@ -345,7 +355,6 @@ func TestSwitchCommandMarksExistingSessionsInRows(t *testing.T) {
 
 	if got, want := gotRunnerOptions.Entries, []intfzf.Entry{
 		{Label: "[ ]     \x1b[32m[Existing]\x1b[0m  live-app  /tmp/live-app", Value: "/tmp/live-app"},
-		{Label: "[ ]     \x1b[33m[New]\x1b[0m  new-app  /tmp/new-app", Value: "/tmp/new-app"},
 		{Label: "[ ]   \x1b[1m\x1b[36m[Settings]\x1b[0m        \x1b[2mmanage pinned directories\x1b[0m", Value: switchSettingsSentinel},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
