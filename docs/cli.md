@@ -60,7 +60,7 @@
 - `projmux tmux popup-toggle sessionizer` -> `projmux switch --ui=popup`
 - `projmux tmux popup-toggle session-popup` -> `projmux sessions --ui=popup`
 - `projmux tmux popup-toggle ai-split-picker-right` -> `projmux ai picker --inside right`
-- `projmux tmux popup-toggle ai-split-settings` -> `projmux ai settings`
+- `projmux tmux popup-toggle ai-split-settings` -> `projmux settings`
 - `projmux switch --ui=popup`
 - `projmux switch --ui=sidebar`
 - `projmux sessions --ui=popup`

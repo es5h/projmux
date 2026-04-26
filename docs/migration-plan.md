@@ -67,7 +67,7 @@ The standalone tmux path is:
 
 1. `projmux tmux print-config` prints bindings that call `projmux` directly.
 2. `projmux tmux install` writes that snippet to `~/.config/tmux/projmux.conf` and includes it from `~/.tmux.conf`.
-3. `projmux tmux popup-toggle <mode>` replaces `tmux-popup-toggle.sh` for sessionizer, session popup, sidebar, AI picker, and AI settings popups.
+3. `projmux tmux popup-toggle <mode>` replaces `tmux-popup-toggle.sh` for sessionizer, session popup, sidebar, AI picker, and the unified settings popup.
 4. `projmux attention <toggle|clear|window>` replaces tmux attention wrapper scripts for pane focus hooks and window badges.
 5. `projmux ai status`, `projmux ai notify`, and `projmux ai watch-title` replace the AI pane state and notification shell scripts.
 6. `projmux status <git|kube>` replaces tmux status-bar segment scripts for git branch and kube context rendering.

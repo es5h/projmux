@@ -531,7 +531,7 @@ func buildPopupToggle(mode tmuxPopupToggleMode, binaryPath, marker string, ctx t
 	case "ai-split-settings":
 		options.Width = popupSize(ctx.ClientWidth, 55, 80)
 		options.Height = popupSize(ctx.ClientHeight, 40, 14)
-		commandArgs = []string{"ai", "settings"}
+		commandArgs = []string{"settings"}
 	default:
 		return "", inttmux.PopupOptions{}, fmt.Errorf("unknown tmux popup-toggle mode: %s", mode.Raw)
 	}

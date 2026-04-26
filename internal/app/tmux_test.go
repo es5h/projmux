@@ -181,6 +181,38 @@ func TestAppRunTmuxPopupToggleOpensStandaloneSidebar(t *testing.T) {
 	}
 }
 
+func TestAppRunTmuxPopupToggleOpensSettingsHub(t *testing.T) {
+	t.Parallel()
+
+	marker := popupMarkerPath(sanitizePopupKey("/dev/pts/projmux-test-settings"), "ai-split-settings")
+	_ = os.Remove(marker)
+	defer os.Remove(marker)
+
+	runner := &recordingTmuxRunner{formats: map[string]string{
+		"#{client_tty}":    "/dev/pts/projmux-test-settings",
+		"#{pane_id}":       "%1",
+		"#{client_width}":  "200",
+		"#{client_height}": "50",
+	}}
+	cmd := &tmuxCommand{
+		runner:     runner,
+		executable: func() (string, error) { return "/tmp/projmux", nil },
+	}
+
+	if err := cmd.Run([]string{"popup-toggle", "ai-split-settings"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	got := runner.calls[len(runner.calls)-1]
+	command := got.args[len(got.args)-1]
+	if !strings.Contains(command, "'/tmp/projmux' 'settings'") {
+		t.Fatalf("popup command = %q, want settings command", command)
+	}
+	if strings.Contains(command, "'ai' 'settings'") {
+		t.Fatalf("popup command = %q, want unified settings hub", command)
+	}
+}
+
 func TestAppRunTmuxPopupToggleClosesExistingMarkerWithClientOverride(t *testing.T) {
 	t.Parallel()
 

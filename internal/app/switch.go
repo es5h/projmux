@@ -402,32 +402,33 @@ func (c *switchCommand) runSettings(stdout, stderr io.Writer) error {
 			return nil
 		}
 
-		switch {
-		case action == "add-interactive":
-			if err := c.runAddPinInteractive(stdout); err != nil {
-				return err
-			}
-		case strings.HasPrefix(action, "add:"):
-			target := strings.TrimPrefix(action, "add:")
-			if err := c.addPin(target, stdout); err != nil {
-				return err
-			}
-		case action == "clear":
-			if err := c.clearPins(); err != nil {
-				return err
-			}
-			if stdout != nil {
-				_, _ = fmt.Fprintln(stdout, "cleared pins")
-			}
-		case strings.HasPrefix(action, "pin:"):
-			target := strings.TrimPrefix(action, "pin:")
-			if err := c.togglePin(target, stdout); err != nil {
-				return err
-			}
-		default:
-			printSwitchUsage(stderr)
-			return fmt.Errorf("unknown switch settings action: %s", action)
+		if err := c.executeSettingsAction(action, stdout, stderr); err != nil {
+			return err
 		}
+	}
+}
+
+func (c *switchCommand) executeSettingsAction(action string, stdout, stderr io.Writer) error {
+	switch {
+	case action == "add-interactive":
+		return c.runAddPinInteractive(stdout)
+	case strings.HasPrefix(action, "add:"):
+		target := strings.TrimPrefix(action, "add:")
+		return c.addPin(target, stdout)
+	case action == "clear":
+		if err := c.clearPins(); err != nil {
+			return err
+		}
+		if stdout != nil {
+			_, _ = fmt.Fprintln(stdout, "cleared pins")
+		}
+		return nil
+	case strings.HasPrefix(action, "pin:"):
+		target := strings.TrimPrefix(action, "pin:")
+		return c.togglePin(target, stdout)
+	default:
+		printSwitchUsage(stderr)
+		return fmt.Errorf("unknown switch settings action: %s", action)
 	}
 }
 

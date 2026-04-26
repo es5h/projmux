@@ -20,7 +20,7 @@ escape sequences that projmux maps to tmux `User0` through `User9` keys.
 | `Alt-2` | Open existing session popup |
 | `Alt-3` | Open project switcher popup |
 | `Alt-4` | Open AI split picker |
-| `Alt-5` | Open AI split settings |
+| `Alt-5` | Open settings |
 | `Ctrl-n` | New tmux window in the current pane directory |
 | `Alt-Left/Right/Up/Down` | Move between panes |
 | `Alt-Shift-Left/Right` | Previous/next window |
@@ -41,7 +41,7 @@ escape sequences that projmux maps to tmux `User0` through `User9` keys.
 | `ESC [ 9004 u` | `User3` | Project switcher popup |
 | `ESC [ 9005 u` | `User4` | Project sidebar |
 | `ESC [ 9006 u` | `User5` | AI split picker |
-| `ESC [ 9007 u` | `User6` | AI split settings |
+| `ESC [ 9007 u` | `User6` | Settings |
 | `ESC [ 9008 u` | `User7` | New tmux window in the current pane directory |
 | `ESC [ 9009 u` | `User8` | Previous tmux window |
 | `ESC [ 9010 u` | `User9` | Next tmux window |
