@@ -24,7 +24,7 @@ const (
 	settingsNoopValue          = "__settings_noop__"
 	settingsSectionAI          = "section:ai"
 	settingsSectionProject     = "section:project-picker"
-	settingsSectionInfo        = "section:info"
+	settingsSectionAbout       = "section:about"
 	settingsActionPrefixAI     = "ai:"
 	settingsActionPrefixSwitch = "switch:"
 	settingsProjectAdd         = "project:add"
@@ -131,8 +131,8 @@ func (c *settingsCommand) rootEntries() []intfzf.Entry {
 			Value: settingsSectionProject,
 		},
 		{
-			Label: "\x1b[34mInfo\x1b[0m             \x1b[90mversion, repository, keybinding guide\x1b[0m",
-			Value: settingsSectionInfo,
+			Label: "\x1b[34mAbout\x1b[0m            \x1b[90mversion, source, common keys\x1b[0m",
+			Value: settingsSectionAbout,
 		},
 	}
 }
@@ -159,12 +159,12 @@ func (c *settingsCommand) sectionOptions(section string) (intfzf.Options, error)
 			ExpectKeys: []string{"enter"},
 			Bindings:   settingsCloseBindings(),
 		}, nil
-	case settingsSectionInfo:
+	case settingsSectionAbout:
 		return intfzf.Options{
-			UI:         "settings-info",
-			Entries:    settingsInfoEntries(),
-			Prompt:     "Settings > Info > ",
-			Header:     "App information and terminal keybinding guide",
+			UI:         "settings-about",
+			Entries:    settingsAboutEntries(),
+			Prompt:     "Settings > About > ",
+			Header:     "projmux app information",
 			Footer:     projmuxFooter("Back row: parent  |  Esc/Alt+5/Ctrl+Alt+S: close"),
 			ExpectKeys: []string{"enter"},
 			Bindings:   settingsCloseBindings(),
@@ -397,35 +397,35 @@ func (c *settingsCommand) aiEntries() []intfzf.Entry {
 	return entries
 }
 
-func settingsInfoEntries() []intfzf.Entry {
+func settingsAboutEntries() []intfzf.Entry {
 	return []intfzf.Entry{
 		settingsBackEntry(),
 		{
-			Label: "Version              projmux " + version.String(),
+			Label: "Version        projmux " + version.String(),
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "GitHub               https://github.com/es5h/projmux",
+			Label: "Source         https://github.com/es5h/projmux",
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Update               go install github.com/es5h/projmux/cmd/projmux@latest",
+			Label: "Update         go install github.com/es5h/projmux/cmd/projmux@latest",
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Keybinding layer     terminal sends CSI-u keys; tmux maps User0 through User10",
+			Label: "Main keys      Alt-1 sidebar, Alt-2 sessions, Alt-3 projects",
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Ghostty              bind keys to send ESC [ 9001 u through ESC [ 9011 u",
+			Label: "AI/settings    Alt-4 AI picker, Alt-5 settings",
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Windows Terminal     use sendInput for the same CSI-u escape sequences",
+			Label: "Window keys    Ctrl-n new, Alt-r rename, Alt-Shift arrows switch",
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Rename window        tmux User10 sends rename-window; Ghostty can map ctrl+m if safe",
+			Label: "More keys      see docs/keybindings.md for Ghostty and Windows Terminal",
 			Value: settingsNoopValue,
 		},
 	}
