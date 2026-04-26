@@ -239,6 +239,7 @@ func (c *aiCommand) runWatchTitle(args []string, stderr io.Writer) error {
 			return nil
 		}
 		snapshot := c.readAIWatchSnapshot(paneID)
+		snapshot = c.bootstrapAIWatchMetadata(paneID, snapshot)
 		nextState := "idle"
 		evidence := strings.Join([]string{snapshot.title, snapshot.capture}, "\n")
 		switch {
@@ -1045,6 +1046,8 @@ func (c *aiCommand) gitBranchForPath(path string) string {
 
 type aiPaneInfo struct {
 	title          string
+	command        string
+	path           string
 	agent          string
 	context        string
 	topic          string
@@ -1058,6 +1061,8 @@ func (c *aiCommand) readAIPaneInfo(paneID string) aiPaneInfo {
 	const delim = "__PROJMUX_TMUX_AI_SEP__"
 	format := strings.Join([]string{
 		"#{pane_title}",
+		"#{pane_current_command}",
+		"#{pane_current_path}",
 		"#{" + aiPaneAgentOption + "}",
 		"#{" + aiPaneContextOption + "}",
 		"#{" + aiPaneTopicOption + "}",
@@ -1072,28 +1077,76 @@ func (c *aiCommand) readAIPaneInfo(paneID string) aiPaneInfo {
 		info.title = strings.TrimSpace(fields[0])
 	}
 	if len(fields) > 1 {
-		info.agent = strings.TrimSpace(fields[1])
+		info.command = strings.TrimSpace(fields[1])
 	}
 	if len(fields) > 2 {
-		info.context = strings.TrimSpace(fields[2])
+		info.path = strings.TrimSpace(fields[2])
 	}
 	if len(fields) > 3 {
-		info.topic = strings.TrimSpace(fields[3])
+		info.agent = strings.TrimSpace(fields[3])
 	}
 	if len(fields) > 4 {
-		info.aiState = strings.TrimSpace(fields[4])
+		info.context = strings.TrimSpace(fields[4])
 	}
 	if len(fields) > 5 {
-		info.attentionState = strings.TrimSpace(fields[5])
+		info.topic = strings.TrimSpace(fields[5])
 	}
 	if len(fields) > 6 {
-		info.ack = strings.TrimSpace(fields[6])
+		info.aiState = strings.TrimSpace(fields[6])
+	}
+	if len(fields) > 7 {
+		info.attentionState = strings.TrimSpace(fields[7])
+	}
+	if len(fields) > 8 {
+		info.ack = strings.TrimSpace(fields[8])
 	}
 	if info.title == "" {
 		info.title = c.readTrimmed("tmux", "display-message", "-p", "-t", paneID, "#{pane_title}")
 	}
 	info.capture = c.readAIPaneCapture(paneID)
 	return info
+}
+
+func (c *aiCommand) bootstrapAIWatchMetadata(paneID string, info aiPaneInfo) aiPaneInfo {
+	paneID = strings.TrimSpace(paneID)
+	if paneID == "" {
+		return info
+	}
+	agent := normalizeAIMode(strings.TrimSpace(info.agent))
+	if agent == aiModeSelective {
+		agent = inferAIAgent(info)
+	}
+	if agent == "" || agent == aiModeSelective || agent == aiModeShell {
+		return info
+	}
+	if strings.TrimSpace(info.agent) == "" {
+		_ = c.run("tmux", "set-option", "-p", "-t", paneID, aiPaneManagedOption, "1")
+		_ = c.run("tmux", "set-option", "-p", "-t", paneID, aiPaneAgentOption, agent)
+		info.agent = agent
+	}
+	if strings.TrimSpace(info.context) == "" && strings.TrimSpace(info.path) != "" {
+		_ = c.run("tmux", "set-option", "-p", "-t", paneID, aiPaneContextOption, strings.TrimSpace(info.path))
+		info.context = strings.TrimSpace(info.path)
+	}
+	if strings.TrimSpace(info.topic) == "" {
+		if topic := bestAITopic(info.title, info.capture); topic != "" {
+			_ = c.run("tmux", "set-option", "-p", "-t", paneID, aiPaneTopicOption, topic)
+			info.topic = topic
+		}
+	}
+	return info
+}
+
+func inferAIAgent(info aiPaneInfo) string {
+	evidence := strings.ToLower(strings.Join([]string{info.agent, info.title, info.command, info.capture}, "\n"))
+	switch {
+	case strings.Contains(evidence, "claude"):
+		return aiModeClaude
+	case strings.Contains(evidence, "codex") || strings.Contains(evidence, "gpt-"):
+		return aiModeCodex
+	default:
+		return ""
+	}
 }
 
 func (c *aiCommand) readAIWatchSnapshot(paneID string) aiPaneInfo {

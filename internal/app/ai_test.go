@@ -470,7 +470,7 @@ func TestAINotifyUsesPaneMetadataBeforeMutableTitle(t *testing.T) {
 		}
 		switch {
 		case len(args) == 5 && args[0] == "display-message" && args[3] == "%8" && strings.Contains(args[4], aiPaneAgentOption):
-			return []byte("renamed by agent__PROJMUX_TMUX_AI_SEP__claude__PROJMUX_TMUX_AI_SEP__" + work + "__PROJMUX_TMUX_AI_SEP__approval needed__PROJMUX_TMUX_AI_SEP__waiting__PROJMUX_TMUX_AI_SEP__reply__PROJMUX_TMUX_AI_SEP__\n"), nil
+			return []byte("renamed by agent__PROJMUX_TMUX_AI_SEP__node__PROJMUX_TMUX_AI_SEP__" + work + "__PROJMUX_TMUX_AI_SEP__claude__PROJMUX_TMUX_AI_SEP__" + work + "__PROJMUX_TMUX_AI_SEP__approval needed__PROJMUX_TMUX_AI_SEP__waiting__PROJMUX_TMUX_AI_SEP__reply__PROJMUX_TMUX_AI_SEP__\n"), nil
 		case reflect.DeepEqual(args, []string{"capture-pane", "-p", "-J", "-S", "-80", "-t", "%8"}):
 			return []byte("waiting for approval\n"), nil
 		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%8", "#{@projmux_desktop_notified}"}),
@@ -553,7 +553,7 @@ func TestAIWatchTitleUsesCapturePaneAsReplySignal(t *testing.T) {
 			}
 			return []byte("%10\n"), nil
 		case len(args) == 5 && args[0] == "display-message" && args[3] == "%10" && strings.Contains(args[4], aiPaneAgentOption):
-			return []byte("codexcli__PROJMUX_TMUX_AI_SEP__codex__PROJMUX_TMUX_AI_SEP____PROJMUX_TMUX_AI_SEP____PROJMUX_TMUX_AI_SEP__thinking__PROJMUX_TMUX_AI_SEP__busy__PROJMUX_TMUX_AI_SEP__\n"), nil
+			return []byte("codexcli__PROJMUX_TMUX_AI_SEP__node__PROJMUX_TMUX_AI_SEP____PROJMUX_TMUX_AI_SEP__codex__PROJMUX_TMUX_AI_SEP____PROJMUX_TMUX_AI_SEP____PROJMUX_TMUX_AI_SEP__thinking__PROJMUX_TMUX_AI_SEP__busy__PROJMUX_TMUX_AI_SEP__\n"), nil
 		case reflect.DeepEqual(args, []string{"capture-pane", "-p", "-J", "-S", "-80", "-t", "%10"}):
 			return []byte("waiting for input\n"), nil
 		}
@@ -570,6 +570,45 @@ func TestAIWatchTitleUsesCapturePaneAsReplySignal(t *testing.T) {
 	}
 	if !containsAICommandArgs(commands, "tmux", []string{"set-option", "-p", "-t", "%10", "@projmux_ai_state", "waiting"}) {
 		t.Fatalf("commands = %#v, want waiting AI state from capture", commands)
+	}
+}
+
+func TestAIWatchTitleBootstrapsMetadataForExistingCodexPane(t *testing.T) {
+	home := t.TempDir()
+	cmd := testAICommand(home)
+	checks := 0
+	cmd.readCommand = func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if name != "tmux" {
+			return nil, os.ErrNotExist
+		}
+		switch {
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%11", "#{pane_id}"}):
+			checks++
+			if checks > 1 {
+				return nil, os.ErrNotExist
+			}
+			return []byte("%11\n"), nil
+		case len(args) == 5 && args[0] == "display-message" && args[3] == "%11" && strings.Contains(args[4], aiPaneAgentOption):
+			return []byte("es5h__PROJMUX_TMUX_AI_SEP__node__PROJMUX_TMUX_AI_SEP__" + home + "__PROJMUX_TMUX_AI_SEP____PROJMUX_TMUX_AI_SEP____PROJMUX_TMUX_AI_SEP____PROJMUX_TMUX_AI_SEP____PROJMUX_TMUX_AI_SEP____PROJMUX_TMUX_AI_SEP__\n"), nil
+		case reflect.DeepEqual(args, []string{"capture-pane", "-p", "-J", "-S", "-80", "-t", "%11"}):
+			return []byte("gpt-5.5 medium · ~\n"), nil
+		}
+		return []byte("\n"), nil
+	}
+
+	if err := cmd.Run([]string{"watch-title", "%11"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run watch-title error = %v", err)
+	}
+
+	commands := cmdRecorder(cmd).commands
+	for _, want := range [][]string{
+		{"set-option", "-p", "-t", "%11", "@projmux_ai_managed", "1"},
+		{"set-option", "-p", "-t", "%11", "@projmux_ai_agent", "codex"},
+		{"set-option", "-p", "-t", "%11", "@projmux_ai_context", home},
+	} {
+		if !containsAICommandArgs(commands, "tmux", want) {
+			t.Fatalf("commands = %#v, want bootstrapped metadata %v", commands, want)
+		}
 	}
 }
 
