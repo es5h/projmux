@@ -21,6 +21,8 @@ to land as one branch.
 | Pending | `fix/shell-pane-title-policy` | Use shell process names for plain shell pane titles. | Shell panes should show `zsh`, `bash`, etc. instead of branch-derived titles. Keep AI pane titles agent/topic based. |
 | Pending | `fix/panes-preview-agent-label` | Show AI agent names in Alt-2 panes preview instead of raw process names. | For AI panes show `codex`, `claude`, etc.; for normal panes keep process name plus pane number/title/status metadata. |
 | Pending | `fix/popup-minimum-dimensions` | Add minimum dimensions for sidebar, popup, and preview surfaces. | Keep percentage sizing, but enforce minimum width/height so required information remains visible. |
+| Pending | `research/picker-card-ui` | Evaluate replacing or extending the fzf picker layer for multiline card-style rows. | fzf rows are effectively single-line; decide whether near-term fzf extensions are enough or whether a custom picker backend is needed. |
+| Pending | `refactor/picker-backend-interface` | Introduce a picker backend abstraction if fzf cannot support the desired card UI. | Keep current fzf behavior as the first backend; make room for a richer TUI backend later. |
 
 ## Branch Flow
 
@@ -93,3 +95,25 @@ to land as one branch.
   - key status badge
   - one useful metadata column
 - Avoid expanding beyond the terminal size; clamp safely on small terminals.
+
+## Picker UI Direction
+
+- Current picker surfaces use fzf as the primary module.
+- fzf is good for fast single-line selection, but it limits row layout to
+  compact one-line items.
+- Desired direction:
+  - multiline card-like items
+  - richer visual hierarchy per item
+  - searchable fields that can be scoped independently
+  - examples: search only project name while still displaying path, session,
+    badges, windows, and metadata on the card
+- First step is research:
+  - Check whether fzf can support enough of this with delimiter/nth/search field
+    tuning, preview panes, ANSI styling, and bind-driven refresh.
+  - If a simple fzf extension can satisfy the near-term need, land that first.
+  - If not, defer the full card UI to a picker backend abstraction and a later
+    custom TUI implementation.
+- Keep compatibility:
+  - existing fzf workflows must remain stable while evaluating alternatives
+  - terminal keybinding and popup launch behavior should not depend on a single
+    picker implementation
