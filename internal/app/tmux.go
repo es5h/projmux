@@ -749,8 +749,8 @@ func tmuxAppConfig(binaryPath string) string {
 		"set -sg escape-time 100",
 		"set -g status-style \"bg=colour235,fg=colour245\"",
 		"set -g message-style \"bg=colour45,fg=colour16,bold\"",
-		"set -g pane-border-style \"fg=colour238\"",
-		"set -g pane-active-border-style \"fg=colour45\"",
+		"set -g pane-border-style \"fg=colour236\"",
+		"set -g pane-active-border-style \"fg=colour51,bold\"",
 		"set -g pane-border-status top",
 		"set -g pane-border-format " + tmuxConfigQuote(paneBorderFormat),
 	}

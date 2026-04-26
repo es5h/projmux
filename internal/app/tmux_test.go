@@ -358,6 +358,8 @@ func TestTmuxPrintAppConfigUsesIsolatedAppSettings(t *testing.T) {
 		"set -g automatic-rename-format \"#{pane_title}\"",
 		"set -g mode-keys vi",
 		"set -sg escape-time 100",
+		"set -g pane-border-style \"fg=colour236\"",
+		"set -g pane-active-border-style \"fg=colour51,bold\"",
 		"set -g pane-border-status top",
 		"set -g pane-border-format \"#{?pane_active,#[bold#,fg=colour16#,bg=colour45] > ",
 		"#[bold#,fg=colour220] ● ",
