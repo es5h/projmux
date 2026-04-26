@@ -151,6 +151,12 @@ func TestRunnerRunSupportsRead0MultilineEntries(t *testing.T) {
 				"--info", "inline-right",
 				"--read0",
 				"--print0",
+				"--highlight-line",
+				"--gap",
+				"--gap-line", "─",
+				"--pointer", "▶",
+				"--marker-multi-line", "╭│╰",
+				"--color", "current-bg:#263238,current-fg:#ffffff,current-hl:#ffcc66,selected-bg:#1f292d,gutter:#263238",
 			}
 			if got := args; !equalStrings(got, want) {
 				t.Fatalf("command args = %q, want %q", got, want)

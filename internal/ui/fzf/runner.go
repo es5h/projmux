@@ -107,7 +107,16 @@ func runnerArgs(options Options, supportsFooter bool) []string {
 		"--info", "inline-right",
 	}
 	if options.Read0 {
-		args = append(args, "--read0", "--print0")
+		args = append(args,
+			"--read0",
+			"--print0",
+			"--highlight-line",
+			"--gap",
+			"--gap-line", "─",
+			"--pointer", "▶",
+			"--marker-multi-line", "╭│╰",
+			"--color", "current-bg:#263238,current-fg:#ffffff,current-hl:#ffcc66,selected-bg:#1f292d,gutter:#263238",
+		)
 	}
 	if len(options.ExpectKeys) != 0 {
 		args = append(args, "--expect", strings.Join(options.ExpectKeys, ","))
