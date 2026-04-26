@@ -218,6 +218,11 @@ projmux status kube [session]
 
 전체 명령은 `projmux help` 또는 `<command> --help`로 확인할 수 있습니다.
 
+## 릴리스
+
+`v*` tag가 push되면 GitHub Actions가 release archive를 게시합니다. 첫 앱 기준
+baseline release는 `v0.1.0`입니다.
+
 ## 프로젝트 탐색 방식
 
 `projmux switch`는 pinned directory, 현재 살아 있는 tmux session, 발견된

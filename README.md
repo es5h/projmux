@@ -220,6 +220,11 @@ projmux status kube [session]
 
 Run `projmux help` or `<command> --help` for the full command surface.
 
+## Releases
+
+GitHub Actions publishes release archives when a `v*` tag is pushed. The first
+app baseline release is `v0.1.0`.
+
 ## How It Finds Projects
 
 `projmux switch` combines pinned directories, live tmux sessions, and discovered
