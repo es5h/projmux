@@ -139,7 +139,7 @@ func formatSidebarWindowSummary(window corepreview.Window, panes []corepreview.P
 	if prefix != "" {
 		prefix += " "
 	}
-	return fmt.Sprintf("%s[%s] %s", prefix, sanitizeCell(window.Index), strings.Join(titles, " | "))
+	return fmt.Sprintf("[%s] %s%s", sanitizeCell(window.Index), prefix, strings.Join(titles, " | "))
 }
 
 func sidebarWindowTitles(windowIndex string, panes []corepreview.Pane) []string {
