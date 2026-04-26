@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"strconv"
 	"strings"
 )
 
@@ -104,7 +103,6 @@ func runnerArgs(options Options, supportsFooter bool) []string {
 		"--with-nth", "1",
 		"--exit-0",
 		"--scrollbar", "█",
-		"--scroll-off", strconv.Itoa(3),
 		"--info", "inline-right",
 	}
 	if len(options.ExpectKeys) != 0 {

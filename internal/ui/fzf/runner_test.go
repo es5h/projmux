@@ -35,7 +35,6 @@ func TestRunnerRunInvokesFZFWithCandidates(t *testing.T) {
 				"--with-nth", "1",
 				"--exit-0",
 				"--scrollbar", "█",
-				"--scroll-off", "3",
 				"--info", "inline-right",
 			}; !equalStrings(got, want) {
 				t.Fatalf("command args = %q, want %q", got, want)
@@ -106,7 +105,6 @@ func TestRunnerRunReturnsExpectedKeyAndHiddenValue(t *testing.T) {
 				"--with-nth", "1",
 				"--exit-0",
 				"--scrollbar", "█",
-				"--scroll-off", "3",
 				"--info", "inline-right",
 				"--expect", "alt-t",
 			}; !equalStrings(got, want) {
@@ -194,7 +192,6 @@ func TestRunnerRunIncludesPreviewAndBindings(t *testing.T) {
 				"--with-nth", "1",
 				"--exit-0",
 				"--scrollbar", "█",
-				"--scroll-off", "3",
 				"--info", "inline-right",
 				"--footer", "help text",
 				"--footer-border", "line",
@@ -241,7 +238,6 @@ func TestRunnerRunFallsBackToHeaderWhenFooterIsUnsupported(t *testing.T) {
 				"--with-nth", "1",
 				"--exit-0",
 				"--scrollbar", "█",
-				"--scroll-off", "3",
 				"--info", "inline-right",
 				"--header", "help text",
 				"--separator", "─",
