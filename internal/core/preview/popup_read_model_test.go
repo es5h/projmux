@@ -86,6 +86,43 @@ func TestBuildPopupReadModelUsesStoredSelectionWhenAvailable(t *testing.T) {
 	}
 }
 
+func TestBuildPopupReadModelPreservesPaneMetadata(t *testing.T) {
+	t.Parallel()
+
+	model := BuildPopupReadModel(PopupReadModelInputs{
+		SessionName: "dev",
+		StoredSelection: Selection{
+			SessionName: "dev",
+			WindowIndex: "1",
+			PaneIndex:   "0",
+		},
+		HasStoredSelection: true,
+		Windows:            []Window{{Index: "1", Name: "dev", PaneCount: 1}},
+		Panes: []Pane{{
+			SessionName:         "dev",
+			WindowIndex:         "1",
+			Index:               "0",
+			Title:               "codex",
+			AttentionState:      "busy",
+			AIState:             "thinking",
+			AIAgent:             "codex",
+			AITopic:             "projmux",
+			AttentionAck:        "1",
+			AttentionFocusArmed: "1",
+			Command:             "node",
+			Path:                "/repo",
+		}},
+	})
+
+	if len(model.Panes) != 1 {
+		t.Fatalf("len(Panes) = %d, want 1", len(model.Panes))
+	}
+	got := model.Panes[0]
+	if got.AttentionState != "busy" || got.AIState != "thinking" || got.AIAgent != "codex" || got.AITopic != "projmux" || got.AttentionAck != "1" || got.AttentionFocusArmed != "1" {
+		t.Fatalf("pane metadata = %#v, want preserved metadata", got)
+	}
+}
+
 func TestBuildPopupReadModelFallsBackToActivePaneWhenStoredPaneIsMissing(t *testing.T) {
 	t.Parallel()
 

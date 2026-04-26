@@ -204,13 +204,20 @@ func normalizedPanes(panes []Pane) []Pane {
 			continue
 		}
 		normalized = append(normalized, Pane{
-			ID:          strings.TrimSpace(pane.ID),
-			WindowIndex: windowIndex,
-			Index:       index,
-			Title:       strings.TrimSpace(pane.Title),
-			Command:     strings.TrimSpace(pane.Command),
-			Path:        strings.TrimSpace(pane.Path),
-			Active:      pane.Active,
+			ID:                  strings.TrimSpace(pane.ID),
+			SessionName:         strings.TrimSpace(pane.SessionName),
+			WindowIndex:         windowIndex,
+			Index:               index,
+			Title:               strings.TrimSpace(pane.Title),
+			AttentionState:      strings.TrimSpace(pane.AttentionState),
+			AIState:             strings.TrimSpace(pane.AIState),
+			AIAgent:             strings.TrimSpace(pane.AIAgent),
+			AITopic:             strings.TrimSpace(pane.AITopic),
+			AttentionAck:        strings.TrimSpace(pane.AttentionAck),
+			AttentionFocusArmed: strings.TrimSpace(pane.AttentionFocusArmed),
+			Command:             strings.TrimSpace(pane.Command),
+			Path:                strings.TrimSpace(pane.Path),
+			Active:              pane.Active,
 		})
 	}
 	return normalized
