@@ -18,13 +18,9 @@ func RenderSwitchPreview(model corepreview.SwitchReadModel, ui string) string {
 	var builder strings.Builder
 
 	writePopupSection(&builder, "Target")
-	writePopupKV(&builder, "dir", sanitizeSwitchPreviewPath(model))
 	writePopupKV(&builder, "session", sanitizeCell(model.SessionName))
 	writePopupKV(&builder, "mode", formatPopupSwitchPreviewMode(model.SessionMode))
 
-	if branch := sanitizeCell(model.GitBranch); branch != "" {
-		writePopupKV(&builder, "git", branch)
-	}
 	if kube := formatKubeSummary(model); kube != "" {
 		writePopupKV(&builder, "k8s", kube)
 	}
@@ -69,10 +65,6 @@ func formatPopupSwitchPreviewMode(mode string) string {
 
 func renderSidebarSwitchPreview(model corepreview.SwitchReadModel) string {
 	var builder strings.Builder
-
-	writeSidebarSection(&builder, "Dir")
-	builder.WriteString(sanitizeSwitchPreviewPath(model))
-	builder.WriteString("\n\n")
 
 	if model.SessionMode != "existing" {
 		writeSidebarSection(&builder, "Status")

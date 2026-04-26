@@ -43,10 +43,8 @@ func TestRenderSwitchPreviewForExistingSession(t *testing.T) {
 
 	want := "" +
 		"\x1b[1m\x1b[36mTarget\x1b[0m\n" +
-		"  \x1b[2mdir\x1b[0m  ~rp/app\n" +
 		"  \x1b[2msession\x1b[0m  app\n" +
 		"  \x1b[2mmode\x1b[0m  \x1b[32mexisting\x1b[0m\n" +
-		"  \x1b[2mgit\x1b[0m  main\n" +
 		"  \x1b[2mk8s\x1b[0m  \x1b[31mkind-dev\x1b[0m/\x1b[34mapps\x1b[0m\n\n" +
 		"\x1b[1m\x1b[36mWindows\x1b[0m\n" +
 		"[1] shell               1p\n" +
@@ -73,7 +71,6 @@ func TestRenderSwitchPreviewForNewSessionShowsEmptyInventory(t *testing.T) {
 
 	want := "" +
 		"\x1b[1m\x1b[36mTarget\x1b[0m\n" +
-		"  \x1b[2mdir\x1b[0m  /tmp/app\n" +
 		"  \x1b[2msession\x1b[0m  tmp-app\n" +
 		"  \x1b[2mmode\x1b[0m  \x1b[33mnew session\x1b[0m\n\n" +
 		"\x1b[1m\x1b[36mAction\x1b[0m\n" +
@@ -106,8 +103,6 @@ func TestRenderSwitchPreviewForSidebarMatchesLegacySections(t *testing.T) {
 	}, "sidebar")
 
 	want := "" +
-		"\x1b[1m\x1b[36mDir\x1b[0m\n" +
-		"~rp/app\n\n" +
 		"k8s:\x1b[31mkind-dev\x1b[0m/\x1b[34mdefault\x1b[0m\n\n" +
 		"\x1b[1m\x1b[36mWindows\x1b[0m\n" +
 		"[1] shell\n" +
@@ -127,8 +122,6 @@ func TestRenderSwitchPreviewForSidebarNewSessionShowsStatus(t *testing.T) {
 	}, "sidebar")
 
 	want := "" +
-		"\x1b[1m\x1b[36mDir\x1b[0m\n" +
-		"/tmp/app\n\n" +
 		"\x1b[1m\x1b[36mStatus\x1b[0m\n" +
 		"\x1b[33mnew session\x1b[0m\n"
 	if got != want {

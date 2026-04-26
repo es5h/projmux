@@ -30,6 +30,7 @@ type SwitchCandidate struct {
 	DisplayName   string
 	SessionName   string
 	ModeLabel     string
+	GitBranch     string
 	UI            string
 	AttentionRank int
 	Pinned        bool
@@ -93,9 +94,6 @@ func FormatSwitchCardLabel(item picker.Item) string {
 		title = sanitizeCell(item.Value)
 	}
 	lines := []string{ansiBold + title + ansiReset}
-	if len(item.Badges) != 0 {
-		lines = append(lines, ansiDim+"  "+strings.Join(sanitizeCells(item.Badges), "  ")+ansiReset)
-	}
 	for _, meta := range sanitizeCells(item.MetaLines) {
 		if meta == "" {
 			continue
@@ -117,12 +115,12 @@ func switchPickerItem(candidate SwitchCandidate) picker.Item {
 		}
 	}
 
-	metaLines := make([]string, 0, 3)
-	if mode := sanitizeCell(candidate.ModeLabel); mode != "" {
-		metaLines = append(metaLines, mode)
-	}
+	metaLines := make([]string, 0, 2)
 	if path := switchPickerPath(candidate); path != "" {
 		metaLines = append(metaLines, path)
+	}
+	if branch := sanitizeCell(candidate.GitBranch); branch != "" {
+		metaLines = append(metaLines, "git: "+branch)
 	}
 
 	badges := make([]string, 0, 3)
