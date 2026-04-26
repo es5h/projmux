@@ -1227,7 +1227,7 @@ func pickerCloseBindings() []string {
 func switchPreviewWindow(ui string) string {
 	switch ui {
 	case switchUISidebar:
-		return "down,35%,border-top"
+		return "down,25%,border-top"
 	case switchUIPopup:
 		return "right,60%,border-left"
 	default:
@@ -1253,11 +1253,7 @@ func switchPickerFooter(ui string) string {
 }
 
 func projmuxFooter(text string) string {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return "[projmux]"
-	}
-	return "[projmux]\n" + text
+	return strings.TrimSpace(text)
 }
 
 func switchSidebarInitialPos(plan switchPlan) int {

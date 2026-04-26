@@ -46,7 +46,7 @@ func TestSettingsHubSetsAIDefaultMode(t *testing.T) {
 	if got, want := rootOptions.Prompt, "Settings > "; got != want {
 		t.Fatalf("root settings prompt = %q, want %q", got, want)
 	}
-	if got, want := rootOptions.Footer, "[projmux]\nEnter: open  |  Esc/Alt+5/Ctrl+Alt+S: close"; got != want {
+	if got, want := rootOptions.Footer, "Enter: open  |  Esc/Alt+5/Ctrl+Alt+S: close"; got != want {
 		t.Fatalf("root settings footer = %q, want %q", got, want)
 	}
 	if !hasEntryValue(rootOptions.Entries, settingsSectionAI) {

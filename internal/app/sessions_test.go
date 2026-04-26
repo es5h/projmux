@@ -52,7 +52,7 @@ func TestAppRunSessionsDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 	if got, want := gotOptions.Prompt, "› "; got != want {
 		t.Fatalf("runner prompt = %q, want %q", got, want)
 	}
-	if got, want := gotOptions.Footer, "[projmux]\nEnter: switch to previewed target\nCtrl-X: kill focused session\nLeft/Right: preview window\nAlt-Up/Alt-Down: preview pane"; got != want {
+	if got, want := gotOptions.Footer, "Enter: switch to previewed target\nCtrl-X: kill focused session\nLeft/Right: preview window\nAlt-Up/Alt-Down: preview pane"; got != want {
 		t.Fatalf("runner footer = %q, want %q", got, want)
 	}
 	if got, want := gotOptions.ExpectKeys, []string{sessionsKillExpectKey}; !equalStrings(got, want) {
@@ -119,7 +119,7 @@ func TestSessionsCommandSupportsSidebarUI(t *testing.T) {
 	if got, want := gotOptions.Prompt, "› "; got != want {
 		t.Fatalf("runner prompt = %q, want %q", got, want)
 	}
-	if got, want := gotOptions.Footer, "[projmux]\nEnter: switch to previewed target\nCtrl-X: kill focused session\nLeft/Right: preview window\nAlt-Up/Alt-Down: preview pane"; got != want {
+	if got, want := gotOptions.Footer, "Enter: switch to previewed target\nCtrl-X: kill focused session\nLeft/Right: preview window\nAlt-Up/Alt-Down: preview pane"; got != want {
 		t.Fatalf("runner footer = %q, want %q", got, want)
 	}
 	if got, want := gotOptions.PreviewWindow, "right,60%,border-left"; got != want {

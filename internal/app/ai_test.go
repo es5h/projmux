@@ -55,7 +55,7 @@ func TestAISettingsPickerSetsSelectedMode(t *testing.T) {
 	if got, want := runner.options.Prompt, "AI Setting > "; got != want {
 		t.Fatalf("runner prompt = %q, want %q", got, want)
 	}
-	if got, want := runner.options.Footer, "[projmux]\nEnter: set default  |  Esc/Alt+5/Ctrl+Alt+S: close"; got != want {
+	if got, want := runner.options.Footer, "Enter: set default  |  Esc/Alt+5/Ctrl+Alt+S: close"; got != want {
 		t.Fatalf("runner footer = %q, want %q", got, want)
 	}
 	if got, want := readModeFile(t, home), "shell\n"; got != want {
@@ -63,7 +63,7 @@ func TestAISettingsPickerSetsSelectedMode(t *testing.T) {
 	}
 }
 
-func TestAIPickerLabelsProjmuxFooter(t *testing.T) {
+func TestAIPickerShowsKeyFooter(t *testing.T) {
 	home := t.TempDir()
 	runner := &capturingAIRunner{}
 	cmd := testAICommand(home)
@@ -75,7 +75,7 @@ func TestAIPickerLabelsProjmuxFooter(t *testing.T) {
 	if got, want := runner.options.UI, "ai-picker"; got != want {
 		t.Fatalf("runner UI = %q, want %q", got, want)
 	}
-	if got, want := runner.options.Footer, "[projmux]\nEnter: launch  |  Esc/Alt+4/Alt+5/Ctrl+Alt+S: close"; got != want {
+	if got, want := runner.options.Footer, "Enter: launch  |  Esc/Alt+4/Alt+5/Ctrl+Alt+S: close"; got != want {
 		t.Fatalf("runner footer = %q, want %q", got, want)
 	}
 }

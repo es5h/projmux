@@ -106,7 +106,7 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 	if got, want := gotRunnerOptions.Prompt, "› "; got != want {
 		t.Fatalf("runner prompt = %q, want %q", got, want)
 	}
-	if got, want := gotRunnerOptions.Footer, "[projmux]\nEnter: switch to previewed target\nCtrl-X: kill focused session\nAlt-P: pin/unpin focused directory\nLeft/Right: preview window\nAlt-Up/Alt-Down: preview pane"; got != want {
+	if got, want := gotRunnerOptions.Footer, "Enter: switch to previewed target\nCtrl-X: kill focused session\nAlt-P: pin/unpin focused directory\nLeft/Right: preview window\nAlt-Up/Alt-Down: preview pane"; got != want {
 		t.Fatalf("runner footer = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.PreviewCommand, "exec '/tmp/projmux' 'switch' 'preview' '--ui=popup' {2}"; got != want {
@@ -181,13 +181,13 @@ func TestSwitchCommandSupportsSidebarUI(t *testing.T) {
 	if got, want := gotRunnerOptions.Prompt, "› "; got != want {
 		t.Fatalf("runner prompt = %q, want %q", got, want)
 	}
-	if got, want := gotRunnerOptions.Footer, "[projmux]\nEnter: switch/create\nCtrl-X: kill focused session\nAlt-P: pin/unpin focused directory"; got != want {
+	if got, want := gotRunnerOptions.Footer, "Enter: switch/create\nCtrl-X: kill focused session\nAlt-P: pin/unpin focused directory"; got != want {
 		t.Fatalf("runner footer = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.PreviewCommand, "exec '/tmp/projmux' 'switch' 'preview' '--ui=sidebar' {2}"; got != want {
 		t.Fatalf("runner preview command = %q, want %q", got, want)
 	}
-	if got, want := gotRunnerOptions.PreviewWindow, "down,35%,border-top"; got != want {
+	if got, want := gotRunnerOptions.PreviewWindow, "down,25%,border-top"; got != want {
 		t.Fatalf("runner preview window = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Bindings, []string{
@@ -432,7 +432,7 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 	if got, want := fakeRunner.last.PreviewCommand, "exec '/tmp/projmux' 'switch' 'preview' '--ui=sidebar' {2}"; got != want {
 		t.Fatalf("runner preview command = %q, want %q", got, want)
 	}
-	if got, want := fakeRunner.last.PreviewWindow, "down,35%,border-top"; got != want {
+	if got, want := fakeRunner.last.PreviewWindow, "down,25%,border-top"; got != want {
 		t.Fatalf("runner preview window = %q, want %q", got, want)
 	}
 	if got, want := fakeRunner.last.Bindings, []string{
@@ -448,7 +448,7 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 	if got, want := fakeRunner.last.UI, switchUISidebar; got != want {
 		t.Fatalf("runner UI = %q, want %q", got, want)
 	}
-	if got, want := fakeRunner.last.Footer, "[projmux]\nEnter: switch/create\nCtrl-X: kill focused session\nAlt-P: pin/unpin focused directory"; got != want {
+	if got, want := fakeRunner.last.Footer, "Enter: switch/create\nCtrl-X: kill focused session\nAlt-P: pin/unpin focused directory"; got != want {
 		t.Fatalf("runner footer = %q, want %q", got, want)
 	}
 	if got, want := fakeExecutor.ensureSessionName, "managed-work-a"; got != want {
