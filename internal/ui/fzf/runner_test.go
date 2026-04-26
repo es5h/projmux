@@ -202,6 +202,8 @@ func TestRunnerRunSupportsSearchKeyedEntries(t *testing.T) {
 				"--delimiter", "\t",
 				"--nth", "1",
 				"--with-nth", "2",
+				"--disabled",
+				"--bind", "",
 				"--exit-0",
 				"--scrollbar", "█",
 				"--info", "inline-right",
@@ -214,6 +216,10 @@ func TestRunnerRunSupportsSearchKeyedEntries(t *testing.T) {
 				"--marker-multi-line", "┃┃┃",
 				"--color", "current-bg:#263238,current-fg:#ffffff,current-hl:#ffcc66,selected-bg:#1f292d,gutter:#263238,pointer:#e12672,marker:#e12672",
 			}
+			if len(args) <= 16 || !strings.HasPrefix(args[16], "change:reload(perl -0ne ") {
+				t.Fatalf("reload binding = %q, want search-key perl reload", args)
+			}
+			want[16] = args[16]
 			if got := args; !equalStrings(got, want) {
 				t.Fatalf("command args = %q, want %q", got, want)
 			}
@@ -236,6 +242,39 @@ func TestRunnerRunSupportsSearchKeyedEntries(t *testing.T) {
 	}
 	if got, want := fake.stdin.String(), "workspace\tworkspace\n  ~/workspace\t/home/tester/workspace"; got != want {
 		t.Fatalf("stdin = %q, want %q", got, want)
+	}
+}
+
+func TestRunnerRunRewritesSearchKeyedValuePlaceholders(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCommand{stdout: "workspace\tworkspace\n  ~/workspace\t/home/tester/workspace\x00"}
+
+	r := &runner{
+		lookupPath:     func(string) (string, error) { return "/usr/bin/fzf", nil },
+		supportsFooter: func(string) bool { return true },
+		newCommand: func(name string, args ...string) command {
+			if !containsString(args, "--preview") || !containsString(args, "preview {3}") {
+				t.Fatalf("command args = %q, want preview placeholder rewritten to {3}", args)
+			}
+			if !containsString(args, "right:execute-silent(cycle {3})") {
+				t.Fatalf("command args = %q, want binding placeholder rewritten to {3}", args)
+			}
+			return fake
+		},
+	}
+
+	_, err := r.Run(Options{
+		UI:             "popup",
+		Read0:          true,
+		PreviewCommand: "preview {2}",
+		Bindings:       []string{"right:execute-silent(cycle {2})"},
+		Entries: []Entry{
+			{SearchKey: "workspace", Label: "workspace\n  ~/workspace", Value: "/home/tester/workspace"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
 	}
 }
 

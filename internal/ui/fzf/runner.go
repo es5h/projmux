@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -79,8 +80,15 @@ func (r *runner) Run(options Options) (Result, error) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	cmd := r.newCommand(path, runnerArgs(options, supportsFooter)...)
-	cmd.SetStdin(strings.NewReader(renderedInput(options)))
+	input := renderedInput(options)
+	filterFile, cleanup, err := searchKeyFilterFile(options, input)
+	if err != nil {
+		return Result{}, err
+	}
+	defer cleanup()
+
+	cmd := r.newCommand(path, runnerArgs(options, supportsFooter, filterFile)...)
+	cmd.SetStdin(strings.NewReader(input))
 	cmd.SetStdout(&stdout)
 	cmd.SetStderr(&stderr)
 	if err := cmd.Run(); err != nil {
@@ -94,7 +102,7 @@ func (r *runner) Run(options Options) (Result, error) {
 	return selectedResult(trimTrailingRecordTerminators(stdout.String()), options.ExpectKeys), nil
 }
 
-func runnerArgs(options Options, supportsFooter bool) []string {
+func runnerArgs(options Options, supportsFooter bool, filterFile string) []string {
 	searchKeyed := hasSearchKey(options)
 	args := []string{
 		"--prompt", resolvedPrompt(options),
@@ -108,6 +116,9 @@ func runnerArgs(options Options, supportsFooter bool) []string {
 		args = append(args, "--nth", "1", "--with-nth", "2")
 	} else {
 		args = append(args, "--with-nth", "1")
+	}
+	if filterFile != "" {
+		args = append(args, "--disabled", "--bind", "change:reload("+searchKeyFilterCommand(filterFile)+")")
 	}
 	args = append(args,
 		"--exit-0",
@@ -140,6 +151,9 @@ func runnerArgs(options Options, supportsFooter bool) []string {
 		}
 	}
 	if previewCommand := strings.TrimSpace(options.PreviewCommand); previewCommand != "" {
+		if searchKeyed {
+			previewCommand = searchKeyValuePlaceholder(previewCommand)
+		}
 		args = append(args, "--preview", previewCommand)
 		if previewWindow := strings.TrimSpace(options.PreviewWindow); previewWindow != "" {
 			args = append(args, "--preview-window", previewWindow)
@@ -149,6 +163,9 @@ func runnerArgs(options Options, supportsFooter bool) []string {
 		binding = strings.TrimSpace(binding)
 		if binding == "" {
 			continue
+		}
+		if searchKeyed {
+			binding = searchKeyValuePlaceholder(binding)
 		}
 		args = append(args, "--bind", binding)
 	}
@@ -262,6 +279,46 @@ func firstLine(value string) string {
 		return strings.TrimSpace(before)
 	}
 	return value
+}
+
+func searchKeyFilterFile(options Options, input string) (string, func(), error) {
+	if !hasSearchKey(options) {
+		return "", func() {}, nil
+	}
+
+	file, err := os.CreateTemp("", "projmux-fzf-*.items")
+	if err != nil {
+		return "", func() {}, fmt.Errorf("create fzf search-key filter file: %w", err)
+	}
+	path := file.Name()
+	cleanup := func() { _ = os.Remove(path) }
+
+	if _, err := file.WriteString(input); err != nil {
+		_ = file.Close()
+		cleanup()
+		return "", func() {}, fmt.Errorf("write fzf search-key filter file: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		cleanup()
+		return "", func() {}, fmt.Errorf("close fzf search-key filter file: %w", err)
+	}
+	return path, cleanup, nil
+}
+
+func searchKeyFilterCommand(path string) string {
+	const script = `BEGIN{$q=lc shift}($k)=split(/\t/,$_,2);print if $q eq ""||fuzzy(lc $k,$q);sub fuzzy{my($s,$q)=@_;my$i=0;for my$ch(split//,$q){$i=index($s,$ch,$i);return 0 if $i<0;$i++}1}`
+	return "perl -0ne " + shellQuote(script) + " -- {q} " + shellQuote(path)
+}
+
+func searchKeyValuePlaceholder(command string) string {
+	return strings.ReplaceAll(command, "{2}", "{3}")
+}
+
+func shellQuote(value string) string {
+	if value == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
 func containsString(values []string, target string) bool {
