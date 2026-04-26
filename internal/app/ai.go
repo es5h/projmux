@@ -217,13 +217,14 @@ func (c *aiCommand) notifyAI(paneID string) error {
 	}
 
 	notification := aiNotification{
-		Summary: aiSummaryForKind(replyKind, agentName, cleanTitle),
-		Body:    aiNotificationBody(cleanTitle, aiProjectName(panePath), c.gitBranchForPath(panePath), sessionName, windowName),
-		Urgency: aiUrgencyForKind(replyKind),
-		AppName: "projmux.TmuxCodex",
-		Icon:    c.notificationIcon(agentName),
-		Tag:     paneID,
-		Group:   sessionName,
+		Summary:    aiSummaryForKind(replyKind, agentName, cleanTitle),
+		Body:       aiNotificationBody(cleanTitle, aiProjectName(panePath), c.gitBranchForPath(panePath), sessionName, windowName),
+		Urgency:    aiUrgencyForKind(replyKind),
+		AppName:    "projmux.TmuxCodex",
+		Icon:       c.notificationIcon(agentName),
+		Tag:        paneID,
+		Group:      sessionName,
+		TargetPane: paneID,
 	}
 	if err := c.notificationNotifier().Notify(notification); err != nil {
 		return nil

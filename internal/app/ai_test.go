@@ -400,17 +400,19 @@ func TestAIStatusSetWaitingMarksPaneReplyAndNotifies(t *testing.T) {
 	if len(commands) < len(wantPrefix) || !reflect.DeepEqual(commands[:len(wantPrefix)], wantPrefix) {
 		t.Fatalf("command prefix = %#v, want %#v", commands, wantPrefix)
 	}
-	if !containsAICommand(commands, "notify-send") {
-		t.Fatalf("commands = %#v, want notify-send dispatch", commands)
-	}
-	if !containsAICommandArgs(commands, "notify-send", []string{
+	for _, want := range []string{
+		"notify-send",
 		"--app-name=projmux.TmuxCodex",
 		"--icon=" + filepath.Join(home, ".local", "share", "projmux", "icons", "codex.svg"),
 		"--urgency=critical",
+		"--action=open=Open pane",
 		"Codex 승인 필요 · approval needed",
 		"검토 대기: approval needed · projmux/main",
-	}) {
-		t.Fatalf("commands = %#v, want enriched notify-send message", commands)
+		"/tmp/projmux' tmux focus-pane '%2",
+	} {
+		if !containsAICommandArgSubstring(commands, want) {
+			t.Fatalf("commands = %#v, want notification shell containing %q", commands, want)
+		}
 	}
 	if !containsAICommandArg(commands, "@projmux_desktop_notified") {
 		t.Fatalf("commands = %#v, want notification record", commands)
@@ -600,13 +602,17 @@ func TestAINotifyUsesPaneMetadataBeforeMutableTitle(t *testing.T) {
 	}
 
 	commands := cmdRecorder(cmd).commands
-	if !containsAICommandArgs(commands, "notify-send", []string{
+	for _, want := range []string{
+		"notify-send",
 		"--app-name=projmux.TmuxCodex",
 		"--icon=" + filepath.Join(home, ".local", "share", "projmux", "icons", "claude.svg"),
 		"--urgency=critical",
 		"Claude 승인 필요 · approval needed",
-	}) {
-		t.Fatalf("commands = %#v, want metadata-derived Claude approval notification", commands)
+		"/tmp/projmux' tmux focus-pane '%8",
+	} {
+		if !containsAICommandArgSubstring(commands, want) {
+			t.Fatalf("commands = %#v, want metadata-derived Claude notification containing %q", commands, want)
+		}
 	}
 }
 

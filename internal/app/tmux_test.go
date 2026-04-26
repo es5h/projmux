@@ -288,9 +288,9 @@ func TestTmuxPrintConfigUsesStandaloneBindings(t *testing.T) {
 		"bind-key -n User10 command-prompt",
 		"bind-key R command-prompt",
 		"set-hook -g pane-focus-out",
-		"'/tmp/proj mux/bin/projmux' attention arm #{pane_id}",
+		"'/tmp/proj mux/bin/projmux' attention arm #{hook_pane}",
 		"set-hook -g pane-focus-in",
-		"'/tmp/proj mux/bin/projmux' attention clear #{pane_id}",
+		"'/tmp/proj mux/bin/projmux' attention clear #{hook_pane}",
 		"set-hook -g pane-exited",
 		"sleep 0.05; '/tmp/proj mux/bin/projmux' tmux rebalance-panes",
 		"set-hook -g after-kill-pane",
@@ -323,6 +323,29 @@ func TestTmuxRebalancePanesSelectsMultiPaneWindows(t *testing.T) {
 		{name: "tmux", args: []string{"list-windows", "-a", "-F", "#{window_id}\t#{window_panes}"}},
 		{name: "tmux", args: []string{"select-layout", "-t", "@2", "-E"}},
 		{name: "tmux", args: []string{"select-layout", "-t", "@3", "-E"}},
+	}
+	if !reflect.DeepEqual(runner.calls, want) {
+		t.Fatalf("calls = %#v, want %#v", runner.calls, want)
+	}
+}
+
+func TestTmuxFocusPaneSwitchesToResolvedPaneTarget(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingTmuxRunner{
+		outputs: map[string]string{
+			strings.Join([]string{"tmux", "display-message", "-p", "-t", "%42", "#S\t#{window_index}\t#{pane_index}"}, "\x00"): "repo\t3\t1\n",
+		},
+	}
+	cmd := &tmuxCommand{runner: runner}
+
+	if err := cmd.Run([]string{"focus-pane", "%42"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	want := []recordedTmuxCall{
+		{name: "tmux", args: []string{"display-message", "-p", "-t", "%42", "#S\t#{window_index}\t#{pane_index}"}},
+		{name: "tmux", args: []string{"switch-client", "-t", "repo:3.1"}},
 	}
 	if !reflect.DeepEqual(runner.calls, want) {
 		t.Fatalf("calls = %#v, want %#v", runner.calls, want)

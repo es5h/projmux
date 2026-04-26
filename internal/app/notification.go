@@ -8,13 +8,14 @@ import (
 )
 
 type aiNotification struct {
-	Summary string
-	Body    string
-	Urgency string
-	AppName string
-	Icon    string
-	Tag     string
-	Group   string
+	Summary    string
+	Body       string
+	Urgency    string
+	AppName    string
+	Icon       string
+	Tag        string
+	Group      string
+	TargetPane string
 }
 
 type aiNotifier interface {
@@ -71,6 +72,9 @@ func (n aiDesktopNotifier) Notify(notification aiNotification) error {
 	if icon == "" {
 		icon = "dialog-information"
 	}
+	if script, ok := n.activationScript(notification, icon); ok {
+		return n.command.run("sh", "-c", script)
+	}
 	return n.command.run("notify-send",
 		"--app-name="+notification.AppName,
 		"--icon="+icon,
@@ -78,6 +82,38 @@ func (n aiDesktopNotifier) Notify(notification aiNotification) error {
 		notification.Summary,
 		notification.Body,
 	)
+}
+
+func (n aiDesktopNotifier) activationScript(notification aiNotification, icon string) (string, bool) {
+	paneID := strings.TrimSpace(notification.TargetPane)
+	if paneID == "" {
+		return "", false
+	}
+	binaryPath, err := n.command.binaryPath()
+	if err != nil || strings.TrimSpace(binaryPath) == "" {
+		return "", false
+	}
+
+	args := []string{
+		"notify-send",
+		"--app-name=" + notification.AppName,
+		"--icon=" + icon,
+		"--urgency=" + notification.Urgency,
+		"--action=open=Open pane",
+		"--wait",
+		notification.Summary,
+		notification.Body,
+	}
+	quoted := make([]string, 0, len(args))
+	for _, arg := range args {
+		quoted = append(quoted, shellQuote(arg))
+	}
+	focusCommand := shellQuote(binaryPath) + " tmux focus-pane " + shellQuote(paneID)
+	script := "(" +
+		"action=$(" + strings.Join(quoted, " ") + "); " +
+		"if [ \"$action\" = open ]; then " + focusCommand + " >/dev/null 2>&1 || true; fi" +
+		") >/dev/null 2>&1 &"
+	return script, true
 }
 
 func (n aiDesktopNotifier) dispatchWSLToast(notification aiNotification) error {
