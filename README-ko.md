@@ -36,14 +36,25 @@
 Go로 설치:
 
 ```sh
-go install github.com/es5h/projmux/cmd/projmux@latest
+GOBIN="$HOME/.local/bin" go install github.com/es5h/projmux/cmd/projmux@latest
+hash -r
 ```
 
-Go binary 디렉터리가 `PATH`에 들어 있어야 합니다. 보통 `$(go env GOPATH)/bin`입니다:
+기본적으로 `go install`은 binary를 `$(go env GOPATH)/bin`에 씁니다. 이 위치가
+shell이 `PATH`에서 먼저 찾는 `projmux`와 다를 수 있으므로, 설치나 업데이트 후에도
+실제로 실행되는 `projmux`가 바뀌지 않을 수 있습니다. 위 명령은 `~/.local/bin`이
+이미 `PATH`에 들어 있다는 전제에서 그 위치에 직접 설치하는 권장 방식입니다.
+`hash -r`은 업데이트 후 shell의 command lookup cache를 지웁니다.
+
+`~/.local/bin`이 `PATH`에 들어 있어야 합니다:
 
 ```sh
-export PATH="$(go env GOPATH)/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 ```
+
+대안으로 `$(go env GOPATH)/bin`을 `PATH`에 추가하거나,
+`$(go env GOPATH)/bin/projmux` binary를 `PATH`에서 더 앞에 있는 디렉터리로
+복사할 수 있습니다.
 
 소스에서 빌드:
 

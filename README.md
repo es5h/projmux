@@ -37,15 +37,25 @@ for either its isolated app server or your normal tmux server.
 With Go:
 
 ```sh
-go install github.com/es5h/projmux/cmd/projmux@latest
+GOBIN="$HOME/.local/bin" go install github.com/es5h/projmux/cmd/projmux@latest
+hash -r
 ```
 
-Make sure your Go binary directory is on your `PATH`. It is usually
-`$(go env GOPATH)/bin`:
+By default, `go install` writes binaries to `$(go env GOPATH)/bin`. That may
+install or update a different `projmux` than the one your shell finds first on
+`PATH`. The command above installs directly to `~/.local/bin`, which is the
+recommended location if that directory is already on your `PATH`. `hash -r`
+clears your shell's cached command lookup after an update.
+
+Make sure `~/.local/bin` is on your `PATH`:
 
 ```sh
-export PATH="$(go env GOPATH)/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 ```
+
+As a fallback, add `$(go env GOPATH)/bin` to `PATH` instead, or copy the binary
+from `$(go env GOPATH)/bin/projmux` to a directory that appears earlier on
+`PATH`.
 
 From source:
 
