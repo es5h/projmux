@@ -90,11 +90,7 @@ func BuildSwitchPickerItems(candidates []SwitchCandidate) []picker.Item {
 }
 
 func FormatSwitchCardLabel(item picker.Item) string {
-	title := sanitizeCell(item.Title)
-	if title == "" {
-		title = sanitizeCell(item.Value)
-	}
-	lines := []string{ansiBold + title + ansiReset}
+	lines := []string{formatSwitchCardTitle(item)}
 	for _, meta := range sanitizeCells(item.MetaLines) {
 		if meta == "" {
 			continue
@@ -147,6 +143,7 @@ func switchPickerItem(candidate SwitchCandidate) picker.Item {
 	return picker.Item{
 		Title:         title,
 		Value:         candidate.Path,
+		State:         sanitizeCell(candidate.ModeLabel),
 		SearchText:    title,
 		MetaLines:     metaLines,
 		Badges:        badges,
@@ -171,7 +168,46 @@ func formatSwitchWindowNames(names []string) string {
 	if len(cells) == 0 {
 		return ""
 	}
-	return strings.Join(cells, " | ")
+	tabs := make([]string, 0, len(cells))
+	for _, cell := range cells {
+		tabs = append(tabs, "[ "+cell+" ]")
+	}
+	return strings.Join(tabs, " ")
+}
+
+func formatSwitchCardTitle(item picker.Item) string {
+	title := sanitizeCell(item.Title)
+	if title == "" {
+		title = sanitizeCell(item.Value)
+	}
+	title = formatSwitchCardTitleText(title, item.State, item.Value)
+	if badge := formatSwitchCardStatusBadge(item.Badges); badge != "" {
+		title += " " + badge
+	}
+	return title
+}
+
+func formatSwitchCardTitleText(title, state, value string) string {
+	switch {
+	case value == "__projmux_settings__":
+		return ansiBold + ansiCyan + title + ansiReset
+	case state == "existing":
+		return ansiBold + ansiGreen + title + ansiReset
+	default:
+		return ansiBold + title + ansiReset
+	}
+}
+
+func formatSwitchCardStatusBadge(badges []string) string {
+	for _, badge := range badges {
+		switch sanitizeCell(badge) {
+		case "needs review":
+			return ansiYellow + "●" + ansiReset
+		case "ready":
+			return ansiGreen + "●" + ansiReset
+		}
+	}
+	return ""
 }
 
 func switchPickerPath(candidate SwitchCandidate) string {

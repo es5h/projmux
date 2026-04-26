@@ -6,6 +6,7 @@ import "strings"
 type Item struct {
 	Title         string
 	Value         string
+	State         string
 	SearchText    string
 	MetaLines     []string
 	Badges        []string

@@ -132,7 +132,7 @@ func TestAppRunSwitchDefaultsToPopupAndOpensSelectedSession(t *testing.T) {
 		t.Fatalf("runner candidates = %q, want %q", got, want)
 	}
 	if got, want := gotRunnerOptions.Entries, []intfzf.Entry{
-		{Label: "\x1b[1mworkspace\x1b[0m\n\x1b[2m  ~/workspace\x1b[0m", Value: "/home/tester/workspace"},
+		{Label: "\x1b[1m\x1b[32mworkspace\x1b[0m\n\x1b[2m  ~/workspace\x1b[0m", Value: "/home/tester/workspace"},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
 	}
@@ -236,7 +236,7 @@ func TestSwitchCommandSidebarRowsIncludeAttentionBadge(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	if got, want := gotRunnerOptions.Entries[0].Label, "\x1b[1mapp\x1b[0m\n\x1b[2m  /tmp/app\x1b[0m"; got != want {
+	if got, want := gotRunnerOptions.Entries[0].Label, "\x1b[1m\x1b[32mapp\x1b[0m \x1b[33m●\x1b[0m\n\x1b[2m  /tmp/app\x1b[0m"; got != want {
 		t.Fatalf("runner entry = %q, want %q", got, want)
 	}
 }
@@ -353,7 +353,7 @@ func TestSwitchCommandMarksExistingSessionsInRows(t *testing.T) {
 	}
 
 	if got, want := gotRunnerOptions.Entries, []intfzf.Entry{
-		{Label: "\x1b[1mlive-app\x1b[0m\n\x1b[2m  /tmp/live-app\x1b[0m", Value: "/tmp/live-app"},
+		{Label: "\x1b[1m\x1b[32mlive-app\x1b[0m\n\x1b[2m  /tmp/live-app\x1b[0m", Value: "/tmp/live-app"},
 	}; !equalEntries(got, want) {
 		t.Fatalf("runner entries = %#v, want %#v", got, want)
 	}
