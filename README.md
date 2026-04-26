@@ -13,7 +13,7 @@ for either its isolated app server or your normal tmux server.
 - Project picker that creates or switches to tmux sessions from directories.
 - Existing-session picker with popup previews for windows and panes.
 - Sidebar and popup surfaces backed by `fzf`.
-- Pinned project directories and tagged session actions.
+- Pinned project directories.
 - Persisted preview selection for window and pane cycling.
 - Generated tmux bindings for popup launchers, attention badges, and status bar
   segments.
@@ -166,20 +166,16 @@ Session lifecycle:
 
 ```sh
 projmux attach auto [--keep=N] [--fallback=home|ephemeral]
-projmux kill tagged
-projmux kill tagged <session>...
 projmux prune ephemeral [--keep=N]
 ```
 
-Pins, tags, and preview state:
+Pins and preview state:
 
 ```sh
 projmux pin add <dir>
 projmux pin remove <dir>
 projmux pin toggle <dir>
 projmux pin list
-projmux tag toggle <name>
-projmux tag list
 projmux preview select <session> <window> <pane>
 projmux preview cycle-window <session> <next|prev>
 projmux preview cycle-pane <session> <next|prev>

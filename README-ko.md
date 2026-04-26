@@ -13,7 +13,7 @@
 - 프로젝트 디렉터리에서 tmux 세션을 만들거나 기존 세션으로 전환.
 - 기존 세션 목록을 popup으로 보고 window/pane 미리보기.
 - `fzf` 기반 popup 및 sidebar UI.
-- 자주 쓰는 프로젝트 pin 관리와 tagged session 작업.
+- 자주 쓰는 프로젝트 pin 관리.
 - window/pane preview 선택 상태 저장 및 순환.
 - tmux popup launcher, attention badge, status bar segment 설정 생성.
 - 별도 tmux 서버와 설정으로 동작하는 `projmux shell` 앱 모드.
@@ -163,20 +163,16 @@ projmux current
 
 ```sh
 projmux attach auto [--keep=N] [--fallback=home|ephemeral]
-projmux kill tagged
-projmux kill tagged <session>...
 projmux prune ephemeral [--keep=N]
 ```
 
-Pin, tag, preview 상태:
+Pin과 preview 상태:
 
 ```sh
 projmux pin add <dir>
 projmux pin remove <dir>
 projmux pin toggle <dir>
 projmux pin list
-projmux tag toggle <name>
-projmux tag list
 projmux preview select <session> <window> <pane>
 projmux preview cycle-window <session> <next|prev>
 projmux preview cycle-pane <session> <next|prev>
