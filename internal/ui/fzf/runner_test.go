@@ -133,10 +133,10 @@ func TestRunnerRunReturnsExpectedKeyAndHiddenValue(t *testing.T) {
 	}
 }
 
-func TestRunnerRunUsesHiddenSearchText(t *testing.T) {
+func TestRunnerRunKeepsSearchTextOutOfFZFInput(t *testing.T) {
 	t.Parallel()
 
-	fake := &fakeCommand{stdout: "repo card\t/home/tester/source/repos/repo\tproject repo\n"}
+	fake := &fakeCommand{stdout: "repo card\t/home/tester/source/repos/repo\n"}
 
 	r := &runner{
 		lookupPath:     func(string) (string, error) { return "/usr/bin/fzf", nil },
@@ -150,7 +150,7 @@ func TestRunnerRunUsesHiddenSearchText(t *testing.T) {
 				"--ansi",
 				"--delimiter", "\t",
 				"--with-nth", "1",
-				"--nth", "3",
+				"--nth", "1",
 				"--exit-0",
 				"--scrollbar", "█",
 				"--scroll-off", "3",
@@ -172,9 +172,9 @@ func TestRunnerRunUsesHiddenSearchText(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 	if got != (Result{Value: "/home/tester/source/repos/repo"}) {
-		t.Fatalf("Run() = %#v, want hidden value without search text", got)
+		t.Fatalf("Run() = %#v, want hidden value", got)
 	}
-	if got, want := fake.stdin.String(), "repo card\t/home/tester/source/repos/repo\tproject repo"; got != want {
+	if got, want := fake.stdin.String(), "repo card\t/home/tester/source/repos/repo"; got != want {
 		t.Fatalf("stdin = %q, want %q", got, want)
 	}
 }
