@@ -34,6 +34,23 @@ func TestBuildSwitchRowsFormatsSessionModeAndPath(t *testing.T) {
 	}
 }
 
+func TestBuildSwitchRowsMutesInactiveGitBranch(t *testing.T) {
+	t.Parallel()
+
+	rows := BuildSwitchRows([]SwitchCandidate{{
+		Path:        "/home/tester/workspace",
+		DisplayPath: "~/workspace",
+		SessionName: "workspace",
+		ModeLabel:   "new",
+		GitBranch:   "topic",
+		UI:          "popup",
+	}})
+
+	if got, want := rows[0].Item.MetaLines, []string{"\x1b[38;5;242m~/workspace\x1b[0m \x1b[38;5;245;48;5;238m topic \x1b[0m"}; !equalStringSlices(got, want) {
+		t.Fatalf("item meta lines = %q, want %q", got, want)
+	}
+}
+
 func TestBuildSwitchRowsOmitsBlankMode(t *testing.T) {
 	t.Parallel()
 
@@ -181,7 +198,7 @@ func TestBuildSwitchPickerItemsReturnsBackendNeutralRows(t *testing.T) {
 	if got, want := item.Value, "/home/tester/source/repos/app"; got != want {
 		t.Fatalf("value = %q, want %q", got, want)
 	}
-	if got, want := item.MetaLines, []string{"\x1b[38;5;242m~rp/app\x1b[0m \x1b[1;38;5;16;48;5;45m topic \x1b[0m"}; !equalStringSlices(got, want) {
+	if got, want := item.MetaLines, []string{"\x1b[38;5;242m~rp/app\x1b[0m \x1b[38;5;245;48;5;238m topic \x1b[0m"}; !equalStringSlices(got, want) {
 		t.Fatalf("meta lines = %q, want %q", got, want)
 	}
 	if got, want := item.Badges, []string{"tagged", "pinned"}; !equalStringSlices(got, want) {

@@ -76,7 +76,7 @@ func (c *statusCommand) runGit(args []string, stdout, stderr io.Writer) error {
 	if branch == "" {
 		return nil
 	}
-	_, err := fmt.Fprintf(stdout, " | git:%s", branch)
+	_, err := fmt.Fprintf(stdout, " #[bold,fg=colour16,bg=colour45] %s #[default]", branch)
 	return err
 }
 

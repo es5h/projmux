@@ -19,10 +19,11 @@ const (
 )
 
 const (
-	ansiStatusPath  = "\x1b[38;5;242m"
-	ansiStatusGit   = "\x1b[1;38;5;16;48;5;45m"
-	ansiTabActive   = "\x1b[1;38;5;231;48;5;238m"
-	ansiTabInactive = "\x1b[38;5;245;48;5;235m"
+	ansiStatusPath        = "\x1b[38;5;242m"
+	ansiStatusGitActive   = "\x1b[1;38;5;16;48;5;45m"
+	ansiStatusGitInactive = "\x1b[38;5;245;48;5;238m"
+	ansiTabActive         = "\x1b[1;38;5;231;48;5;238m"
+	ansiTabInactive       = "\x1b[38;5;245;48;5;235m"
 )
 
 type SwitchRow struct {
@@ -187,7 +188,11 @@ func formatSwitchPathGitLine(candidate SwitchCandidate) string {
 		parts = append(parts, ansiStatusPath+path+ansiReset)
 	}
 	if branch != "" {
-		parts = append(parts, ansiStatusGit+" "+branch+" "+ansiReset)
+		style := ansiStatusGitInactive
+		if candidate.ModeLabel == "existing" {
+			style = ansiStatusGitActive
+		}
+		parts = append(parts, style+" "+branch+" "+ansiReset)
 	}
 	return strings.Join(parts, " ")
 }

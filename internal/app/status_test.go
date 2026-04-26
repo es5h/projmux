@@ -30,7 +30,7 @@ func TestStatusGitPrintsBranchForPath(t *testing.T) {
 	if err := cmd.Run([]string{"git", "/repo"}, &stdout, &bytes.Buffer{}); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if got, want := stdout.String(), " | git:main"; got != want {
+	if got, want := stdout.String(), " #[bold,fg=colour16,bg=colour45] main #[default]"; got != want {
 		t.Fatalf("stdout = %q, want %q", got, want)
 	}
 }
@@ -64,7 +64,7 @@ func TestStatusGitUsesCurrentPanePathInsideTmux(t *testing.T) {
 	if err := cmd.Run([]string{"git"}, &stdout, &bytes.Buffer{}); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if got, want := stdout.String(), " | git:abc1234"; got != want {
+	if got, want := stdout.String(), " #[bold,fg=colour16,bg=colour45] abc1234 #[default]"; got != want {
 		t.Fatalf("stdout = %q, want %q", got, want)
 	}
 }

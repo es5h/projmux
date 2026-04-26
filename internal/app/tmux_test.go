@@ -548,8 +548,8 @@ func TestTmuxPrintAppConfigUsesIsolatedAppSettings(t *testing.T) {
 		"bind-key R command-prompt",
 		"bind-key M if -F \"#{mouse}\"",
 		"set -g status-left-length 20",
-		"set -g status-left \"#[bold,fg=colour16,bg=colour45] #{b:pane_current_path} #[default]\"",
-		"#[bold,fg=colour16,bg=colour45] #{b:pane_current_path} #[default]",
+		"set -g status-left \"#[bold,fg=colour231,bg=colour33] #{b:pane_current_path} #[default]\"",
+		"#[bold,fg=colour231,bg=colour33] #{b:pane_current_path} #[default]",
 		"'/tmp/projmux' tmux popup-toggle --client #{client_tty} sessionizer-sidebar",
 		"%Y-%m-%d %H:%M#[default]",
 	} {
