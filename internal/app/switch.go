@@ -1488,6 +1488,7 @@ func (c *switchCommand) renderRows(ctx context.Context, ui string, candidatePath
 			SessionName:   sessionName,
 			ModeLabel:     modeLabel,
 			GitBranch:     c.resolveGitBranch(candidatePath),
+			WindowNames:   c.switchCardWindowNames(ctx, sessionName, modeLabel),
 			UI:            ui,
 			AttentionRank: attentionRanks[sessionName],
 			Pinned:        pinnedSet[cleanOptionalPath(candidatePath)],
@@ -1505,6 +1506,32 @@ func (c *switchCommand) renderRows(ctx context.Context, ui string, candidatePath
 	}
 
 	return entries, sessionNames, nil
+}
+
+func (c *switchCommand) switchCardWindowNames(ctx context.Context, sessionName, modeLabel string) []string {
+	if modeLabel != "existing" {
+		return nil
+	}
+	inventory, err := c.requireSwitchPreviewInventory()
+	if err != nil {
+		return nil
+	}
+	windows, err := inventory.SessionWindows(ctx, sessionName)
+	if err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(windows))
+	for _, window := range windows {
+		name := strings.TrimSpace(window.Name)
+		if name == "" {
+			name = strings.TrimSpace(window.Index)
+		}
+		if name == "" {
+			continue
+		}
+		names = append(names, name)
+	}
+	return names
 }
 
 func (c *switchCommand) switchAttentionRanks(ctx context.Context) map[string]int {

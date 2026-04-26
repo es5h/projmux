@@ -113,9 +113,9 @@ func runnerArgs(options Options, supportsFooter bool) []string {
 			"--highlight-line",
 			"--gap",
 			"--gap-line", "─",
-			"--pointer", "▶",
-			"--marker-multi-line", "╭│╰",
-			"--color", "current-bg:#263238,current-fg:#ffffff,current-hl:#ffcc66,selected-bg:#1f292d,gutter:#263238",
+			"--pointer", "▌",
+			"--marker-multi-line", "┃┃┃",
+			"--color", "current-bg:#263238,current-fg:#ffffff,current-hl:#ffcc66,selected-bg:#1f292d,gutter:#263238,pointer:#e12672,marker:#e12672",
 		)
 	}
 	if len(options.ExpectKeys) != 0 {

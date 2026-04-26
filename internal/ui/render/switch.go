@@ -31,6 +31,7 @@ type SwitchCandidate struct {
 	SessionName   string
 	ModeLabel     string
 	GitBranch     string
+	WindowNames   []string
 	UI            string
 	AttentionRank int
 	Pinned        bool
@@ -115,12 +116,19 @@ func switchPickerItem(candidate SwitchCandidate) picker.Item {
 		}
 	}
 
-	metaLines := make([]string, 0, 2)
-	if path := switchPickerPath(candidate); path != "" {
-		metaLines = append(metaLines, path)
-	}
+	metaLines := make([]string, 0, 3)
+	meta := switchPickerPath(candidate)
 	if branch := sanitizeCell(candidate.GitBranch); branch != "" {
-		metaLines = append(metaLines, "git: "+branch)
+		if meta != "" {
+			meta += " "
+		}
+		meta += "[" + branch + "]"
+	}
+	if meta != "" {
+		metaLines = append(metaLines, meta)
+	}
+	if windows := formatSwitchWindowNames(candidate.WindowNames); windows != "" {
+		metaLines = append(metaLines, windows)
 	}
 
 	badges := make([]string, 0, 3)
@@ -156,6 +164,14 @@ func sanitizeCells(values []string) []string {
 		cells = append(cells, value)
 	}
 	return cells
+}
+
+func formatSwitchWindowNames(names []string) string {
+	cells := sanitizeCells(names)
+	if len(cells) == 0 {
+		return ""
+	}
+	return strings.Join(cells, " | ")
 }
 
 func switchPickerPath(candidate SwitchCandidate) string {

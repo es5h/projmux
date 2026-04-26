@@ -29,7 +29,7 @@ func TestBuildSwitchRowsFormatsSessionModeAndPath(t *testing.T) {
 	if got, want := rows[0].Item.EffectiveSearchText(), "workspace"; got != want {
 		t.Fatalf("item search text = %q, want %q", got, want)
 	}
-	if got, want := rows[0].Item.MetaLines, []string{"~/workspace", "git: main"}; !equalStringSlices(got, want) {
+	if got, want := rows[0].Item.MetaLines, []string{"~/workspace [main]"}; !equalStringSlices(got, want) {
 		t.Fatalf("item meta lines = %q, want %q", got, want)
 	}
 }
@@ -181,7 +181,7 @@ func TestBuildSwitchPickerItemsReturnsBackendNeutralRows(t *testing.T) {
 	if got, want := item.Value, "/home/tester/source/repos/app"; got != want {
 		t.Fatalf("value = %q, want %q", got, want)
 	}
-	if got, want := item.MetaLines, []string{"~rp/app", "git: topic"}; !equalStringSlices(got, want) {
+	if got, want := item.MetaLines, []string{"~rp/app [topic]"}; !equalStringSlices(got, want) {
 		t.Fatalf("meta lines = %q, want %q", got, want)
 	}
 	if got, want := item.Badges, []string{"tagged", "pinned"}; !equalStringSlices(got, want) {
@@ -199,12 +199,13 @@ func TestFormatSwitchCardLabelShowsMultilineContext(t *testing.T) {
 		SessionName:   "repos-app",
 		ModeLabel:     "existing",
 		GitBranch:     "main",
+		WindowNames:   []string{"shell", "server", "tests"},
 		AttentionRank: 1,
 		Pinned:        true,
 	}})
 
 	got := FormatSwitchCardLabel(rows[0].Item)
-	const want = "\x1b[1mapp\x1b[0m\n\x1b[2m  ~rp/app\x1b[0m\n\x1b[2m  git: main\x1b[0m"
+	const want = "\x1b[1mapp\x1b[0m\n\x1b[2m  ~rp/app [main]\x1b[0m\n\x1b[2m  shell | server | tests\x1b[0m"
 	if got != want {
 		t.Fatalf("card label = %q, want %q", got, want)
 	}
