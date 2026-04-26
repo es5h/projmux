@@ -717,7 +717,7 @@ func tmuxStandaloneConfig(binaryPath string) string {
 		"bind-key -n M-4 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle --client #{client_tty} ai-split-picker-right"),
 		"bind-key -n M-5 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle --client #{client_tty} ai-split-settings"),
 		"bind-key -n M-r command-prompt -I \"#{window_name}\" " + tmuxConfigQuote("rename-window -- '%%'"),
-		"bind-key -n User11 command-prompt -I \"#{?#{!=:#{@projmux_ai_topic},},#{@projmux_ai_topic},#{pane_title}}\" " + tmuxConfigQuote("select-pane -T '%%' -t #{pane_id} \\; set-option -p -t #{pane_id} "+aiPaneTopicOption+" '%%'"),
+		"bind-key -n User11 command-prompt -I \"#{?#{!=:#{@projmux_ai_topic},},#{@projmux_ai_topic},#{pane_title}}\" " + tmuxConfigQuote("select-pane -T '%%' \\; set-option -p "+aiPaneTopicOption+" '%%'"),
 		"bind-key -n User0 run-shell " + tmuxConfigQuote(bin+" ai split right"),
 		"bind-key -n User1 run-shell " + tmuxConfigQuote(bin+" ai split down"),
 		"bind-key -n User2 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle --client #{client_tty} session-popup"),
