@@ -33,8 +33,9 @@ escape sequences that projmux maps to tmux `User0` through `User10` keys.
 | `Prefix l` | Open AI split below |
 | `Prefix R` | Rename the current tmux window |
 
-When a pane exits, projmux asks tmux to spread the remaining panes evenly in the
-window so the previous split does not leave one side oversized.
+When a pane exits or is killed, projmux asks tmux shortly after pane removal to
+spread the remaining panes evenly in the window so the previous split does not
+leave one side oversized.
 
 ## Picker Actions
 
