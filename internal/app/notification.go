@@ -89,13 +89,10 @@ func (n aiDesktopNotifier) dbusActivationScript(notification aiNotification, ico
 	if paneID == "" {
 		return "", false
 	}
-	binaryPath, err := n.command.binaryPath()
-	if err != nil || strings.TrimSpace(binaryPath) == "" {
-		return "", false
-	}
 	if n.command.readTrimmed("command", "-v", "busctl") == "" ||
 		n.command.readTrimmed("command", "-v", "dbus-monitor") == "" ||
-		n.command.readTrimmed("command", "-v", "timeout") == "" {
+		n.command.readTrimmed("command", "-v", "timeout") == "" ||
+		n.command.readTrimmed("command", "-v", "tmux") == "" {
 		return "", false
 	}
 
@@ -124,13 +121,22 @@ func (n aiDesktopNotifier) dbusActivationScript(notification aiNotification, ico
 	for _, arg := range args {
 		quoted = append(quoted, shellQuote(arg))
 	}
-	focusCommand := shellQuote(binaryPath) + " tmux focus-pane " + shellQuote(paneID)
+	focusPrefix := ""
+	if tmuxEnv := strings.TrimSpace(n.command.env("TMUX")); tmuxEnv != "" {
+		focusPrefix = "TMUX=" + shellQuote(tmuxEnv) + " "
+	}
+	focusCommand := focusPrefix + "tmux switch-client -t " + shellQuote(paneID) + " >/dev/null 2>&1"
 	script := "(" +
 		"id=$(" + strings.Join(quoted, " ") + " | awk '{print $2}'); " +
 		"[ -n \"$id\" ] || exit 0; " +
 		"timeout 300 dbus-monitor --session " + shellQuote("type='signal',interface='org.freedesktop.Notifications',member='ActionInvoked'") +
-		" | awk -v id=\"$id\" " + shellQuote(`BEGIN{seen=0;found=0} /uint32/ {seen=($2==id)} seen && /string/ {found=1; exit} END{exit found?0:1}`) +
-		" && " + focusCommand + " >/dev/null 2>&1 || true" +
+		" | while IFS= read -r line; do " +
+		"case \"$line\" in " +
+		"*\"uint32 $id\"*) seen=1 ;; " +
+		"*\"string \"*) if [ \"${seen:-}\" = 1 ]; then " + focusCommand + "; break; fi ;; " +
+		"esac; " +
+		"done" +
+		" || true" +
 		") >/dev/null 2>&1 &"
 	return script, true
 }

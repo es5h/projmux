@@ -352,10 +352,20 @@ func TestAIStatusSetWaitingMarksPaneReplyAndNotifies(t *testing.T) {
 	}
 	cmd := testAICommand(home)
 	cmd.now = func() time.Time { return time.Unix(1000, 0) }
+	cmd.lookupEnv = func(name string) string {
+		switch name {
+		case "HOME":
+			return home
+		case "TMUX":
+			return "/tmp/tmux-1000/projmux,1,2"
+		default:
+			return ""
+		}
+	}
 	cmd.readCommand = func(_ context.Context, name string, args ...string) ([]byte, error) {
 		if name == "command" && len(args) == 2 && args[0] == "-v" {
 			switch args[1] {
-			case "notify-send", "busctl", "dbus-monitor", "timeout":
+			case "notify-send", "busctl", "dbus-monitor", "timeout", "tmux":
 				return []byte("/usr/bin/" + args[1] + "\n"), nil
 			}
 		}
@@ -414,10 +424,11 @@ func TestAIStatusSetWaitingMarksPaneReplyAndNotifies(t *testing.T) {
 		"Open pane",
 		"dbus-monitor",
 		"ActionInvoked",
-		"/string/ {found=1",
+		"while IFS= read -r line",
+		"TMUX='",
 		"Codex 승인 필요 · approval needed",
 		"검토 대기: approval needed · projmux/main",
-		"/tmp/projmux' tmux focus-pane '%2",
+		"tmux switch-client -t '%2",
 	} {
 		if !containsAICommandArgSubstring(commands, want) {
 			t.Fatalf("commands = %#v, want notification shell containing %q", commands, want)
@@ -583,7 +594,7 @@ func TestAINotifyUsesPaneMetadataBeforeMutableTitle(t *testing.T) {
 	cmd.readCommand = func(_ context.Context, name string, args ...string) ([]byte, error) {
 		if name == "command" && len(args) == 2 && args[0] == "-v" {
 			switch args[1] {
-			case "notify-send", "busctl", "dbus-monitor", "timeout":
+			case "notify-send", "busctl", "dbus-monitor", "timeout", "tmux":
 				return []byte("/usr/bin/" + args[1] + "\n"), nil
 			}
 		}
@@ -621,7 +632,7 @@ func TestAINotifyUsesPaneMetadataBeforeMutableTitle(t *testing.T) {
 		"Open pane",
 		"dbus-monitor",
 		"Claude 승인 필요 · approval needed",
-		"/tmp/projmux' tmux focus-pane '%8",
+		"tmux switch-client -t '%8",
 	} {
 		if !containsAICommandArgSubstring(commands, want) {
 			t.Fatalf("commands = %#v, want metadata-derived Claude notification containing %q", commands, want)
