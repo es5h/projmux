@@ -81,7 +81,7 @@ func (c *attentionCommand) runClear(args []string, stderr io.Writer) error {
 	if state == attentionStateBusy {
 		return nil
 	}
-	if state == attentionStateReply && c.paneOption(paneID, attentionFocusArmedOption) != "1" {
+	if state == attentionStateReply && c.paneOption(paneID, attentionFocusArmedOption) != "1" && !c.paneActive(paneID) {
 		return nil
 	}
 	c.unsetPaneOption(paneID, attentionStateOption)
@@ -164,6 +164,10 @@ func (c *attentionCommand) paneTitle(paneID string) string {
 
 func (c *attentionCommand) paneAttentionState(paneID string) string {
 	return c.paneOption(paneID, attentionStateOption)
+}
+
+func (c *attentionCommand) paneActive(paneID string) bool {
+	return c.paneOption(paneID, "pane_active") == "1"
 }
 
 func (c *attentionCommand) paneOption(paneID, option string) string {
