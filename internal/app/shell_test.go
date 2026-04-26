@@ -53,6 +53,7 @@ func TestShellWritesAppConfigAndRunsIsolatedTmux(t *testing.T) {
 		"bind-key -n User8 previous-window",
 		"bind-key -n User9 next-window",
 		"bind-key -n User10 command-prompt",
+		"bind-key -n User11 command-prompt",
 		"set -g status-left-length 20",
 		"set -g status-left \"#[bold,fg=colour16,bg=colour45] #{b:pane_current_path} #[default]\"",
 		"#[bold,fg=colour16,bg=colour45] #{b:pane_current_path} #[default]",

@@ -161,7 +161,7 @@ func TestSettingsHubShowsAboutSection(t *testing.T) {
 		"https://github.com/es5h/projmux",
 		"go install github.com/es5h/projmux/cmd/projmux@latest",
 		"sidebar, sessions, projects",
-		"new window, rename window",
+		"new window, rename window/pane",
 		"terminal sends CSI-u keys",
 		"bind alt/ctrl keys",
 		"sendInput",

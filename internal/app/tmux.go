@@ -74,6 +74,8 @@ func (c *tmuxCommand) Run(args []string, stdout, stderr io.Writer) error {
 		return c.runPopupToggle(fs.Args()[1:], stderr)
 	case "rebalance-panes":
 		return c.runRebalancePanes(fs.Args()[1:], stderr)
+	case "rename-pane":
+		return c.runRenamePane(fs.Args()[1:], stderr)
 	case "print-config":
 		return c.runPrintConfig(fs.Args()[1:], stdout, stderr)
 	case "print-app-config":
@@ -109,6 +111,25 @@ func (c *tmuxCommand) runRebalancePanes(args []string, stderr io.Writer) error {
 			continue
 		}
 		_, _ = c.runner.Run(context.Background(), "tmux", "select-layout", "-t", strings.TrimSpace(windowID), "-E")
+	}
+	return nil
+}
+
+func (c *tmuxCommand) runRenamePane(args []string, stderr io.Writer) error {
+	if len(args) != 2 || strings.TrimSpace(args[0]) == "" || strings.TrimSpace(args[1]) == "" {
+		printTmuxUsage(stderr)
+		return fmt.Errorf("tmux rename-pane requires <pane> <title>")
+	}
+	if c.runner == nil {
+		return errors.New("configure tmux runner: tmux runner is not configured")
+	}
+	paneID := strings.TrimSpace(args[0])
+	title := strings.TrimSpace(args[1])
+	if _, err := c.runner.Run(context.Background(), "tmux", "select-pane", "-T", title, "-t", paneID); err != nil {
+		return fmt.Errorf("rename tmux pane title: %w", err)
+	}
+	if _, err := c.runner.Run(context.Background(), "tmux", "set-option", "-p", "-t", paneID, aiPaneTopicOption, title); err != nil {
+		return fmt.Errorf("rename tmux pane topic: %w", err)
 	}
 	return nil
 }
@@ -453,6 +474,7 @@ func printTmuxUsage(w io.Writer) {
 	fmt.Fprintln(w, "  projmux tmux popup-sessions")
 	fmt.Fprintln(w, "  projmux tmux popup-toggle [--client <key>] <session-popup|sessionizer|sessionizer-sidebar|ai-split-picker-right|ai-split-picker-down|ai-split-settings>")
 	fmt.Fprintln(w, "  projmux tmux rebalance-panes")
+	fmt.Fprintln(w, "  projmux tmux rename-pane <pane> <title>")
 	fmt.Fprintln(w, "  projmux tmux print-config [--bin <path>]")
 	fmt.Fprintln(w, "  projmux tmux print-app-config [--bin <path>]")
 	fmt.Fprintln(w, "  projmux tmux install [--bin <path>] [--config <path>] [--include <path>]")
@@ -664,6 +686,7 @@ func tmuxStandaloneConfig(binaryPath string) string {
 		"set -s user-keys[5] \"\\033[9006u\"",
 		"set -s user-keys[6] \"\\033[9007u\"",
 		"set -s user-keys[10] \"\\033[9011u\"",
+		"set -s user-keys[11] \"\\033[9012u\"",
 		"set-hook -g pane-focus-out " + tmuxConfigQuote("run-shell -b "+tmuxConfigQuote(bin+" attention arm #{hook_pane}")),
 		"set-hook -g pane-focus-in " + tmuxConfigQuote("run-shell -b "+tmuxConfigQuote(bin+" attention clear #{hook_pane}")),
 		"set-hook -g after-select-pane " + tmuxConfigQuote("run-shell -b "+tmuxConfigQuote(bin+" attention clear #{pane_id}")),
@@ -687,12 +710,14 @@ func tmuxStandaloneConfig(binaryPath string) string {
 		"unbind-key -q -n User5",
 		"unbind-key -q -n User6",
 		"unbind-key -q -n User10",
+		"unbind-key -q -n User11",
 		"bind-key -n M-1 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle --client #{client_tty} sessionizer-sidebar"),
 		"bind-key -n M-2 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle --client #{client_tty} session-popup"),
 		"bind-key -n M-3 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle --client #{client_tty} sessionizer"),
 		"bind-key -n M-4 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle --client #{client_tty} ai-split-picker-right"),
 		"bind-key -n M-5 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle --client #{client_tty} ai-split-settings"),
 		"bind-key -n M-r command-prompt -I \"#{window_name}\" " + tmuxConfigQuote("rename-window -- '%%'"),
+		"bind-key -n User11 command-prompt -I \"#{?#{!=:#{@projmux_ai_topic},},#{@projmux_ai_topic},#{pane_title}}\" " + tmuxConfigQuote("select-pane -T '%%' -t #{pane_id} \\; set-option -p -t #{pane_id} "+aiPaneTopicOption+" '%%'"),
 		"bind-key -n User0 run-shell " + tmuxConfigQuote(bin+" ai split right"),
 		"bind-key -n User1 run-shell " + tmuxConfigQuote(bin+" ai split down"),
 		"bind-key -n User2 run-shell " + tmuxConfigQuote(bin+" tmux popup-toggle --client #{client_tty} session-popup"),
@@ -714,7 +739,8 @@ func tmuxStandaloneConfig(binaryPath string) string {
 
 func tmuxAppConfig(binaryPath string) string {
 	bin := tmuxShellQuote(binaryPath)
-	paneLabelFormat := "#{?#{||:#{||:#{||:#{==:#{pane_current_command},zsh},#{==:#{pane_current_command},bash}},#{||:#{==:#{pane_current_command},fish},#{==:#{pane_current_command},sh}}},#{||:#{==:#{pane_current_command},nu},#{==:#{pane_current_command},xonsh}}},#{pane_current_command},#{pane_title}}"
+	shellPaneLabelFormat := "#{?#{||:#{||:#{||:#{==:#{pane_current_command},zsh},#{==:#{pane_current_command},bash}},#{||:#{==:#{pane_current_command},fish},#{==:#{pane_current_command},sh}}},#{||:#{==:#{pane_current_command},nu},#{==:#{pane_current_command},xonsh}}},#{pane_current_command},#{pane_title}}"
+	paneLabelFormat := "#{?#{&&:#{!=:#{@projmux_ai_agent},},#{!=:#{@projmux_ai_topic},}},#{@projmux_ai_topic}," + shellPaneLabelFormat + "}"
 	paneBusyFormat := "#{||:#{==:#{@projmux_attention_state},busy},#{==:#{@projmux_ai_state},thinking}}"
 	paneReplyFormat := "#{||:#{==:#{@projmux_attention_state},reply},#{==:#{@projmux_ai_state},waiting}}"
 	inactivePaneBorderFormat := "#{?" + paneBusyFormat + ",#[bold#,fg=colour220] ● " + paneLabelFormat + " #[default],#{?" + paneReplyFormat + ",#[bold#,fg=colour46] ● " + paneLabelFormat + " #[default],#[fg=colour244] " + paneLabelFormat + " #[default]}}"

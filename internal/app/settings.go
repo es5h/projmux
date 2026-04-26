@@ -417,7 +417,7 @@ func settingsAboutEntries() []intfzf.Entry {
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Tmux actions   new window, rename window, previous/next window",
+			Label: "Tmux actions   new window, rename window/pane, previous/next window",
 			Value: settingsNoopValue,
 		},
 		{
@@ -425,11 +425,11 @@ func settingsAboutEntries() []intfzf.Entry {
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Ghostty        bind alt/ctrl keys to csi:9001u..9011u",
+			Label: "Ghostty        bind alt/ctrl keys to csi:9001u..9012u",
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Windows Term.  bind keys with sendInput \\u001b[9001u..9011u",
+			Label: "Windows Term.  bind keys with sendInput \\u001b[9001u..9012u",
 			Value: settingsNoopValue,
 		},
 		{

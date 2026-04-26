@@ -32,7 +32,7 @@ func TestRenderPopupPreviewWithSelectedWindowAndPane(t *testing.T) {
 		"  \x1b[2mwindows\x1b[0m  2\n" +
 		"  \x1b[2mpane\x1b[0m  4 (window 2)\n" +
 		"  \x1b[2mcmd\x1b[0m  codex\n" +
-		"  \x1b[2mtitle\x1b[0m  tests\n" +
+		"  \x1b[2mtitle\x1b[0m  approval needed\n" +
 		"  \x1b[2mstatus\x1b[0m  badge=needs-reply state=waiting-for-you assistant=codex topic=approval needed clears-on-focus=yes\n" +
 		"  \x1b[2mpath\x1b[0m  ~rp/app\n\n" +
 		"\x1b[1m\x1b[36mWindows\x1b[0m\n" +
@@ -40,7 +40,7 @@ func TestRenderPopupPreviewWithSelectedWindowAndPane(t *testing.T) {
 		"\x1b[1m\x1b[32m[2] app                 2p\x1b[0m\n\n" +
 		"\x1b[1m\x1b[36mPanes\x1b[0m\n" +
 		"[2.3] server             go\n" +
-		"\x1b[1m\x1b[32m[2.4] tests              codex  \x1b[2mbadge=needs-reply state=waiting-for-you assistant=codex topic=approval needed clears-on-focus=yes\x1b[0m\x1b[0m\n\n" +
+		"\x1b[1m\x1b[32m[2.4] approval needed    codex  \x1b[2mbadge=needs-reply state=waiting-for-you assistant=codex topic=approval needed clears-on-focus=yes\x1b[0m\x1b[0m\n\n" +
 		"\x1b[1m\x1b[36mPane Snapshot\x1b[0m\n" +
 		"\x1b[2m────────────────────────────────────────────────────────────────\x1b[0m\n" +
 		"go test ./...\nok\n"

@@ -167,7 +167,7 @@ func sidebarWindowTitles(windowIndex string, panes []corepreview.Pane) []string 
 }
 
 func formatSidebarPaneTitle(pane corepreview.Pane) string {
-	title := sanitizeCell(pane.Title)
+	title := sidebarPaneLabel(pane)
 	if title == "" {
 		return ""
 	}
@@ -184,6 +184,15 @@ func formatSidebarPaneTitle(pane corepreview.Pane) string {
 	default:
 		return title
 	}
+}
+
+func sidebarPaneLabel(pane corepreview.Pane) string {
+	if strings.TrimSpace(pane.AIAgent) != "" {
+		if topic := sanitizeCell(pane.AITopic); topic != "" {
+			return topic
+		}
+	}
+	return sanitizeCell(pane.Title)
 }
 
 func sidebarPaneBadge(pane corepreview.Pane) string {

@@ -162,6 +162,11 @@ func formatPaneSummary(pane preview.Pane) string {
 }
 
 func displayPaneTitle(pane preview.Pane) string {
+	if strings.TrimSpace(pane.AIAgent) != "" {
+		if topic := sanitizeCell(pane.AITopic); topic != "" {
+			return topic
+		}
+	}
 	title := sanitizeCell(pane.Title)
 	command := displayPaneCommand(pane)
 	if title == "" {

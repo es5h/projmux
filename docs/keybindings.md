@@ -6,7 +6,7 @@ through to tmux without extra setup.
 
 Use this page when your terminal emulator consumes a shortcut before tmux sees
 it, or when you want explicit terminal-level bindings. The examples send CSI-u
-escape sequences that projmux maps to tmux `User0` through `User10` keys.
+escape sequences that projmux maps to tmux `User0` through `User11` keys.
 
 한국어 요약: 보통은 별도 설정 없이 `projmux shell`이 생성한 tmux 키가 동작합니다.
 터미널이 `Alt-1` 같은 조합을 먼저 가로채면 아래 Ghostty 또는 Windows Terminal
@@ -25,6 +25,7 @@ escape sequences that projmux maps to tmux `User0` through `User10` keys.
 | `Alt-r` | Rename the current tmux window |
 | `Alt-Left/Right/Up/Down` | Move between panes |
 | `Alt-Shift-Left/Right` | Previous/next window |
+| terminal-configured `User11` | Rename the current tmux pane label |
 | `Prefix b` | Existing session popup |
 | `Prefix f` | Project switcher popup |
 | `Prefix F` | Project sidebar |
@@ -62,6 +63,7 @@ leave one side oversized.
 | `ESC [ 9009 u` | `User8` | Previous tmux window |
 | `ESC [ 9010 u` | `User9` | Next tmux window |
 | `ESC [ 9011 u` | `User10` | Rename the current tmux window |
+| `ESC [ 9012 u` | `User11` | Rename the current tmux pane label |
 
 ## Ghostty
 
@@ -81,6 +83,7 @@ keybind = ctrl+shift+l=csi:9002u
 
 keybind = ctrl+shift+n=csi:9008u
 keybind = alt+r=csi:9011u
+keybind = ctrl+shift+p=csi:9012u
 keybind = alt+shift+left=csi:9009u
 keybind = alt+shift+right=csi:9010u
 ```
@@ -107,6 +110,7 @@ Add entries to `settings.json` under `actions`. Windows Terminal uses
 
     { "keys": "ctrl+shift+n", "command": { "action": "sendInput", "input": "\u001b[9008u" } },
     { "keys": "alt+r", "command": { "action": "sendInput", "input": "\u001b[9011u" } },
+    { "keys": "ctrl+shift+p", "command": { "action": "sendInput", "input": "\u001b[9012u" } },
     { "keys": "alt+shift+left", "command": { "action": "sendInput", "input": "\u001b[9009u" } },
     { "keys": "alt+shift+right", "command": { "action": "sendInput", "input": "\u001b[9010u" } }
   ]

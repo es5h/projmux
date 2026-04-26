@@ -210,6 +210,7 @@ tmux 연동 헬퍼:
 projmux tmux install
 projmux tmux install-app
 projmux tmux popup-toggle <mode>
+projmux tmux rename-pane <pane> <title>
 projmux attention toggle [pane]
 projmux status git [path]
 projmux status kube [session]

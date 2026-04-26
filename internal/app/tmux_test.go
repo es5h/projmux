@@ -395,9 +395,13 @@ func TestTmuxPrintConfigUsesStandaloneBindings(t *testing.T) {
 		"bind-key -n User0 run-shell",
 		"'/tmp/proj mux/bin/projmux' ai split right",
 		"set -s user-keys[10] \"\\033[9011u\"",
+		"set -s user-keys[11] \"\\033[9012u\"",
 		"bind-key -n M-r command-prompt",
 		"rename-window -- '%%'",
 		"bind-key -n User10 command-prompt",
+		"bind-key -n User11 command-prompt",
+		"select-pane -T '%%' -t #{pane_id}",
+		"set-option -p -t #{pane_id} @projmux_ai_topic '%%'",
 		"bind-key R command-prompt",
 		"set-hook -g pane-focus-out",
 		"'/tmp/proj mux/bin/projmux' attention arm #{hook_pane}",
@@ -443,6 +447,25 @@ func TestTmuxRebalancePanesSelectsMultiPaneWindows(t *testing.T) {
 	}
 }
 
+func TestTmuxRenamePaneSetsTitleAndAITopic(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingTmuxRunner{}
+	cmd := &tmuxCommand{runner: runner}
+
+	if err := cmd.Run([]string{"rename-pane", "%42", "projmux-2"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	want := []recordedTmuxCall{
+		{name: "tmux", args: []string{"select-pane", "-T", "projmux-2", "-t", "%42"}},
+		{name: "tmux", args: []string{"set-option", "-p", "-t", "%42", "@projmux_ai_topic", "projmux-2"}},
+	}
+	if !reflect.DeepEqual(runner.calls, want) {
+		t.Fatalf("calls = %#v, want %#v", runner.calls, want)
+	}
+}
+
 func TestTmuxPrintAppConfigUsesIsolatedAppSettings(t *testing.T) {
 	t.Parallel()
 
@@ -468,6 +491,7 @@ func TestTmuxPrintAppConfigUsesIsolatedAppSettings(t *testing.T) {
 		"set -g window-status-separator \" \"",
 		"set -g automatic-rename on",
 		"set -g automatic-rename-format \"#{pane_title}\"",
+		"set -s user-keys[11] \"\\033[9012u\"",
 		"set -g mode-keys vi",
 		"set -sg escape-time 100",
 		"set -g pane-border-style \"fg=colour236\"",
@@ -477,11 +501,15 @@ func TestTmuxPrintAppConfigUsesIsolatedAppSettings(t *testing.T) {
 		"#[bold#,fg=colour220] ● ",
 		"#[bold#,fg=colour46] ● ",
 		"#[fg=colour244] ",
+		"#{@projmux_ai_topic}",
 		"#{pane_current_command},#{pane_title}",
 		"set -s user-keys[7] \"\\033[9008u\"",
 		"set -s user-keys[8] \"\\033[9009u\"",
 		"set -s user-keys[9] \"\\033[9010u\"",
 		"set -s user-keys[10] \"\\033[9011u\"",
+		"bind-key -n User11 command-prompt",
+		"select-pane -T '%%' -t #{pane_id}",
+		"set-option -p -t #{pane_id} @projmux_ai_topic '%%'",
 		"bind-key -n M-Left select-pane -L",
 		"bind-key -n M-Right select-pane -R",
 		"bind-key -n M-Up select-pane -U",
@@ -594,6 +622,7 @@ func TestTmuxCommandRejectsInvalidUsage(t *testing.T) {
 		{name: "popup-sessions extra args", args: []string{"popup-sessions", "extra"}, want: "tmux popup-sessions accepts no arguments"},
 		{name: "missing popup-toggle mode", args: []string{"popup-toggle"}, want: "tmux popup-toggle requires exactly 1 argument"},
 		{name: "unknown popup-toggle mode", args: []string{"popup-toggle", "nope"}, want: "unknown tmux popup-toggle mode: nope"},
+		{name: "missing rename-pane args", args: []string{"rename-pane", "%1"}, want: "tmux rename-pane requires <pane> <title>"},
 	}
 
 	for _, tt := range tests {
