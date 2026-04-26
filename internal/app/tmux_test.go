@@ -292,7 +292,7 @@ func TestTmuxPrintConfigUsesStandaloneBindings(t *testing.T) {
 		"set-hook -g pane-focus-in",
 		"'/tmp/proj mux/bin/projmux' attention clear #{pane_id}",
 		"set-hook -g pane-exited",
-		"sleep 0.05; tmux select-layout -t #{hook_window} -E",
+		"sleep 0.05; '/tmp/proj mux/bin/projmux' tmux rebalance-panes",
 		"set-hook -g after-kill-pane",
 		"'/tmp/proj mux/bin/projmux' attention window #{window_id}",
 		"#[bold,fg=colour16,bg=colour45] projmux #[default]",
@@ -302,6 +302,30 @@ func TestTmuxPrintConfigUsesStandaloneBindings(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Fatalf("print-config output = %q, want substring %q", output, want)
 		}
+	}
+}
+
+func TestTmuxRebalancePanesSelectsMultiPaneWindows(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingTmuxRunner{
+		outputs: map[string]string{
+			strings.Join([]string{"tmux", "list-windows", "-a", "-F", "#{window_id}\t#{window_panes}"}, "\x00"): "@1\t1\n@2\t3\n@3\t2\n",
+		},
+	}
+	cmd := &tmuxCommand{runner: runner}
+
+	if err := cmd.Run([]string{"rebalance-panes"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	want := []recordedTmuxCall{
+		{name: "tmux", args: []string{"list-windows", "-a", "-F", "#{window_id}\t#{window_panes}"}},
+		{name: "tmux", args: []string{"select-layout", "-t", "@2", "-E"}},
+		{name: "tmux", args: []string{"select-layout", "-t", "@3", "-E"}},
+	}
+	if !reflect.DeepEqual(runner.calls, want) {
+		t.Fatalf("calls = %#v, want %#v", runner.calls, want)
 	}
 }
 
@@ -533,6 +557,7 @@ func (s *stubTmuxPopupClient) DisplayPopupWithOptions(_ context.Context, command
 
 type recordingTmuxRunner struct {
 	formats map[string]string
+	outputs map[string]string
 	calls   []recordedTmuxCall
 	err     error
 }
@@ -546,6 +571,9 @@ func (r *recordingTmuxRunner) Run(_ context.Context, name string, args ...string
 	r.calls = append(r.calls, recordedTmuxCall{name: name, args: append([]string(nil), args...)})
 	if name == "tmux" && len(args) == 4 && reflect.DeepEqual(args[:3], []string{"display-message", "-p", "-F"}) {
 		return []byte(r.formats[args[3]] + "\n"), nil
+	}
+	if output, ok := r.outputs[strings.Join(append([]string{name}, args...), "\x00")]; ok {
+		return []byte(output), nil
 	}
 	if r.err != nil {
 		return nil, r.err

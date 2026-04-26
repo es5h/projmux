@@ -51,6 +51,7 @@ configured.
 
 ### Tmux-facing helper entrypoints
 - `projmux tmux popup-toggle <mode>`
+- `projmux tmux rebalance-panes`
 - `projmux tmux print-config [--bin <path>]`
 - `projmux tmux print-app-config [--bin <path>]`
 - `projmux tmux install [--bin <path>] [--config <path>] [--include <path>]`

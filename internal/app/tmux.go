@@ -72,6 +72,8 @@ func (c *tmuxCommand) Run(args []string, stdout, stderr io.Writer) error {
 		return c.runPopupSessions(fs.Args()[1:], stderr)
 	case "popup-toggle":
 		return c.runPopupToggle(fs.Args()[1:], stderr)
+	case "rebalance-panes":
+		return c.runRebalancePanes(fs.Args()[1:], stderr)
 	case "print-config":
 		return c.runPrintConfig(fs.Args()[1:], stdout, stderr)
 	case "print-app-config":
@@ -87,6 +89,28 @@ func (c *tmuxCommand) Run(args []string, stdout, stderr io.Writer) error {
 		printTmuxUsage(stderr)
 		return fmt.Errorf("unknown tmux subcommand: %s", fs.Arg(0))
 	}
+}
+
+func (c *tmuxCommand) runRebalancePanes(args []string, stderr io.Writer) error {
+	if len(args) != 0 {
+		printTmuxUsage(stderr)
+		return fmt.Errorf("tmux rebalance-panes accepts no arguments")
+	}
+	if c.runner == nil {
+		return errors.New("configure tmux runner: tmux runner is not configured")
+	}
+	out, err := c.runner.Run(context.Background(), "tmux", "list-windows", "-a", "-F", "#{window_id}\t#{window_panes}")
+	if err != nil {
+		return nil
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		windowID, paneCountText, ok := strings.Cut(line, "\t")
+		if !ok || strings.TrimSpace(windowID) == "" || parsePositiveInt(paneCountText) < 2 {
+			continue
+		}
+		_, _ = c.runner.Run(context.Background(), "tmux", "select-layout", "-t", strings.TrimSpace(windowID), "-E")
+	}
+	return nil
 }
 
 func (c *tmuxCommand) runPopupPreview(args []string, stderr io.Writer) error {
@@ -425,6 +449,7 @@ func printTmuxUsage(w io.Writer) {
 	fmt.Fprintln(w, "  projmux tmux popup-switch")
 	fmt.Fprintln(w, "  projmux tmux popup-sessions")
 	fmt.Fprintln(w, "  projmux tmux popup-toggle [--client <key>] <session-popup|sessionizer|sessionizer-sidebar|ai-split-picker-right|ai-split-picker-down|ai-split-settings>")
+	fmt.Fprintln(w, "  projmux tmux rebalance-panes")
 	fmt.Fprintln(w, "  projmux tmux print-config [--bin <path>]")
 	fmt.Fprintln(w, "  projmux tmux print-app-config [--bin <path>]")
 	fmt.Fprintln(w, "  projmux tmux install [--bin <path>] [--config <path>] [--include <path>]")
@@ -638,8 +663,8 @@ func tmuxStandaloneConfig(binaryPath string) string {
 		"set -s user-keys[10] \"\\033[9011u\"",
 		"set-hook -g pane-focus-out " + tmuxConfigQuote("run-shell -b "+tmuxConfigQuote(bin+" attention arm #{pane_id}")),
 		"set-hook -g pane-focus-in " + tmuxConfigQuote("run-shell -b "+tmuxConfigQuote(bin+" attention clear #{pane_id}")),
-		"set-hook -g pane-exited " + tmuxConfigQuote("run-shell -b "+tmuxConfigQuote("sleep 0.05; tmux select-layout -t #{hook_window} -E")),
-		"set-hook -g after-kill-pane " + tmuxConfigQuote("run-shell -b "+tmuxConfigQuote("sleep 0.05; tmux select-layout -t #{hook_window} -E")),
+		"set-hook -g pane-exited " + tmuxConfigQuote("run-shell -b "+tmuxConfigQuote("sleep 0.05; "+bin+" tmux rebalance-panes")),
+		"set-hook -g after-kill-pane " + tmuxConfigQuote("run-shell -b "+tmuxConfigQuote("sleep 0.05; "+bin+" tmux rebalance-panes")),
 		"set -g window-status-format " + tmuxConfigQuote("#[fg=colour245,bg=colour235] #("+bin+" attention window #{window_id})#[fg=colour245] #I #W #[default]"),
 		"set -g window-status-current-format " + tmuxConfigQuote("#[bold,fg=colour231,bg=colour238] #("+bin+" attention window #{window_id})#[fg=colour231] #I #W #[default]"),
 		"set -g status-right-length 140",
