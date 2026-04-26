@@ -22,6 +22,9 @@ func TestBuildSwitchRowsFormatsSessionModeAndPath(t *testing.T) {
 	if got, want := rows[0].Value, "/home/tester/workspace"; got != want {
 		t.Fatalf("value = %q, want %q", got, want)
 	}
+	if got, want := rows[0].SearchText, "workspace"; got != want {
+		t.Fatalf("search text = %q, want %q", got, want)
+	}
 }
 
 func TestBuildSwitchRowsOmitsBlankMode(t *testing.T) {
@@ -35,6 +38,9 @@ func TestBuildSwitchRowsOmitsBlankMode(t *testing.T) {
 
 	if got, want := rows[0].Label, "[ ]     tmp-app  /tmp/app"; got != want {
 		t.Fatalf("label = %q, want %q", got, want)
+	}
+	if got, want := rows[0].SearchText, "tmp-app"; got != want {
+		t.Fatalf("search text = %q, want %q", got, want)
 	}
 }
 
@@ -67,6 +73,9 @@ func TestBuildSwitchRowsSanitizesTabsAndNewlines(t *testing.T) {
 	if got, want := rows[0].Label, "[ ]     [new state]  tmp app  /tmp/app one"; got != want {
 		t.Fatalf("label = %q, want %q", got, want)
 	}
+	if got, want := rows[0].SearchText, "tmp app"; got != want {
+		t.Fatalf("search text = %q, want %q", got, want)
+	}
 }
 
 func TestBuildSwitchRowsSidebarUsesAnsiStylingForModeAndToggles(t *testing.T) {
@@ -85,6 +94,9 @@ func TestBuildSwitchRowsSidebarUsesAnsiStylingForModeAndToggles(t *testing.T) {
 	const want = "  \x1b[31mx\x1b[0m \x1b[33m*\x1b[0m \x1b[1m\x1b[32mapp\x1b[0m \x1b[2m~rp/app\x1b[0m"
 	if got := rows[0].Label; got != want {
 		t.Fatalf("label = %q, want %q", got, want)
+	}
+	if got, want := rows[0].SearchText, "app"; got != want {
+		t.Fatalf("search text = %q, want %q", got, want)
 	}
 }
 

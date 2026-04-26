@@ -7,8 +7,9 @@ import (
 )
 
 type SessionRow struct {
-	Label string
-	Value string
+	Label      string
+	Value      string
+	SearchText string
 }
 
 type SessionSummary struct {
@@ -48,8 +49,9 @@ func BuildSessionRows(summaries []SessionSummary) []SessionRow {
 		label := strings.Join(parts, "  ")
 
 		rows = append(rows, SessionRow{
-			Label: label,
-			Value: sanitizeCell(summary.Name),
+			Label:      label,
+			Value:      sanitizeCell(summary.Name),
+			SearchText: sanitizeCell(summary.Name),
 		})
 	}
 	return rows

@@ -300,8 +300,9 @@ func rowsToEntries(rows []intrender.SessionRow) []intfzf.Entry {
 	entries := make([]intfzf.Entry, 0, len(rows))
 	for _, row := range rows {
 		entries = append(entries, intfzf.Entry{
-			Label: row.Label,
-			Value: row.Value,
+			Label:      row.Label,
+			Value:      row.Value,
+			SearchText: row.SearchText,
 		})
 	}
 	return entries

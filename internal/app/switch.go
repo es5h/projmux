@@ -1497,8 +1497,9 @@ func (c *switchCommand) renderRows(ctx context.Context, ui string, candidatePath
 	entries := make([]intfzf.Entry, 0, len(rows))
 	for _, row := range rows {
 		entries = append(entries, intfzf.Entry{
-			Label: row.Label,
-			Value: row.Value,
+			Label:      row.Label,
+			Value:      row.Value,
+			SearchText: row.SearchText,
 		})
 	}
 
