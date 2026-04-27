@@ -433,7 +433,7 @@ func settingsAboutEntries() []intfzf.Entry {
 			Value: settingsNoopValue,
 		},
 		{
-			Label: "Windows Term.  bind keys with sendInput \\u001b[9001u..9012u",
+			Label: "Windows Term.  actions sendInput tmux/meta sequences; keybindings attach keys",
 			Value: settingsNoopValue,
 		},
 		{

@@ -165,7 +165,7 @@ func TestSettingsHubShowsAboutSection(t *testing.T) {
 		"terminal sends CSI-u keys",
 		"Ctrl-M sends 9011u",
 		"bind alt/ctrl keys",
-		"sendInput",
+		"tmux/meta sequences",
 		"docs/keybindings.md",
 	} {
 		if !hasEntryLabelContaining(aboutOptions.Entries, want) {

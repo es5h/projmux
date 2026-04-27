@@ -93,30 +93,46 @@ Reload Ghostty or restart the terminal after changing the config.
 
 ## Windows Terminal
 
-Add entries to `settings.json` under `actions`. Windows Terminal uses
-`sendInput` for arbitrary text input, and escape bytes should be written as
-`\u001b`.
+Add `sendInput` actions to `settings.json` and bind them from `keybindings`.
+Windows Terminal works well with plain tmux escape sequences for the default
+`Alt` shortcuts, while the split actions can send tmux prefix sequences
+directly. Escape bytes should be written as `\u001b`.
 
 ```json
 {
   "actions": [
-    { "keys": "alt+1", "command": { "action": "sendInput", "input": "\u001b[9005u" } },
-    { "keys": "alt+2", "command": { "action": "sendInput", "input": "\u001b[9003u" } },
-    { "keys": "alt+3", "command": { "action": "sendInput", "input": "\u001b[9004u" } },
-    { "keys": "alt+4", "command": { "action": "sendInput", "input": "\u001b[9006u" } },
-    { "keys": "alt+5", "command": { "action": "sendInput", "input": "\u001b[9007u" } },
-
-    { "keys": "ctrl+shift+r", "command": { "action": "sendInput", "input": "\u001b[9001u" } },
-    { "keys": "ctrl+shift+l", "command": { "action": "sendInput", "input": "\u001b[9002u" } },
-
-    { "keys": "ctrl+shift+n", "command": { "action": "sendInput", "input": "\u001b[9008u" } },
-    { "keys": "ctrl+m", "command": { "action": "sendInput", "input": "\u001b[9011u" } },
-    { "keys": "ctrl+shift+m", "command": { "action": "sendInput", "input": "\u001b[9012u" } },
-    { "keys": "alt+shift+left", "command": { "action": "sendInput", "input": "\u001b[9009u" } },
-    { "keys": "alt+shift+right", "command": { "action": "sendInput", "input": "\u001b[9010u" } }
+    { "command": { "action": "sendInput", "input": "\u001b1" }, "id": "User.projmuxSidebar" },
+    { "command": { "action": "sendInput", "input": "\u001b2" }, "id": "User.projmuxSessions" },
+    { "command": { "action": "sendInput", "input": "\u001b3" }, "id": "User.projmuxSwitch" },
+    { "command": { "action": "sendInput", "input": "\u001b4" }, "id": "User.projmuxAIPicker" },
+    { "command": { "action": "sendInput", "input": "\u001b5" }, "id": "User.projmuxSettings" },
+    { "command": { "action": "sendInput", "input": "\u0002r" }, "id": "User.projmuxAISplitRight" },
+    { "command": { "action": "sendInput", "input": "\u0002l" }, "id": "User.projmuxAISplitDown" },
+    { "command": { "action": "sendInput", "input": "\u000e" }, "id": "User.projmuxNewWindow" },
+    { "command": { "action": "sendInput", "input": "\u001b[1;4D" }, "id": "User.projmuxPrevWindow" },
+    { "command": { "action": "sendInput", "input": "\u001b[1;4C" }, "id": "User.projmuxNextWindow" },
+    { "command": { "action": "sendInput", "input": "\u001b[9011u" }, "id": "User.projmuxRenameWindow" },
+    { "command": { "action": "sendInput", "input": "\u001b[9012u" }, "id": "User.projmuxRenamePane" }
+  ],
+  "keybindings": [
+    { "id": "User.projmuxSidebar", "keys": "alt+1" },
+    { "id": "User.projmuxSessions", "keys": "alt+2" },
+    { "id": "User.projmuxSwitch", "keys": "alt+3" },
+    { "id": "User.projmuxAIPicker", "keys": "alt+4" },
+    { "id": "User.projmuxSettings", "keys": "alt+5" },
+    { "id": "User.projmuxAISplitRight", "keys": "ctrl+shift+r" },
+    { "id": "User.projmuxAISplitDown", "keys": "ctrl+shift+l" },
+    { "id": "User.projmuxNewWindow", "keys": "ctrl+n" },
+    { "id": "User.projmuxPrevWindow", "keys": "alt+shift+left" },
+    { "id": "User.projmuxNextWindow", "keys": "alt+shift+right" },
+    { "id": "User.projmuxRenameWindow", "keys": "ctrl+m" },
+    { "id": "User.projmuxRenamePane", "keys": "ctrl+shift+m" }
   ]
 }
 ```
 
-If a key is already bound by Windows Terminal, remove or change the conflicting
-entry before adding the projmux binding.
+This example matches the default projmux app shortcuts without depending on
+CSI-u support from Windows Terminal for the `Alt` shortcuts. `Ctrl-M` and
+`Ctrl-Shift-M` still use CSI-u so tmux can distinguish rename commands from
+plain Enter. If a key is already bound by Windows Terminal, remove or change
+the conflicting `keybindings` entry before adding the projmux binding.
