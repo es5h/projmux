@@ -45,6 +45,10 @@ executable. The hook receives summary, body, urgency, app name, tag, group, and
 icon path as positional arguments and replaces the built-in sender while
 configured.
 
+Without a hook, `projmux` uses `notify-send` on Linux. On WSL it targets
+Windows toast notifications through `powershell.exe` and attempts to register
+the `projmux.TmuxCodex` AppUserModelID automatically on first use.
+
 ### Tmux status bar
 - `projmux status git [path]`
 - `projmux status kube [session]`

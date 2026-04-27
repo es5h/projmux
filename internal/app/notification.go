@@ -51,6 +51,7 @@ type aiDesktopNotifier struct {
 
 func (n aiDesktopNotifier) Notify(notification aiNotification) error {
 	if n.command.isWSL() {
+		_ = n.ensureWSLToastAppID(notification)
 		if err := n.dispatchWSLToast(notification); err == nil {
 			return nil
 		}
@@ -86,6 +87,23 @@ func (n aiDesktopNotifier) dispatchWSLToast(notification aiNotification) error {
 		return errors.New("powershell.exe is unavailable")
 	}
 	script := buildToastPowerShell(notification.Summary, notification.Body, notification.AppName, notification.Tag, notification.Group)
+	return n.command.run(powerShell, "-NoProfile", "-NonInteractive", "-EncodedCommand", encodeUTF16LEBase64(script))
+}
+
+func (n aiDesktopNotifier) ensureWSLToastAppID(notification aiNotification) error {
+	powerShell := n.command.resolvePowerShell()
+	if powerShell == "" {
+		return errors.New("powershell.exe is unavailable")
+	}
+	appID := strings.TrimSpace(notification.AppName)
+	if appID == "" {
+		return errors.New("toast app id is empty")
+	}
+	displayName := "Tmux Codex"
+	if appID != "projmux.TmuxCodex" {
+		displayName = appID
+	}
+	script := buildRegisterToastAppIDPowerShell(appID, displayName)
 	return n.command.run(powerShell, "-NoProfile", "-NonInteractive", "-EncodedCommand", encodeUTF16LEBase64(script))
 }
 

@@ -64,7 +64,9 @@ Open the app once, then use its generated tmux bindings to:
 - zsh for the generated isolated app config.
 - git for branch/status metadata.
 - kubectl is optional and only needed for Kubernetes status segments.
-- `notify-send` is used for desktop notifications on Linux unless
+- On WSL, `projmux` sends Windows toast notifications through `powershell.exe`
+  and auto-registers its toast AppUserModelID on first use when possible.
+- On Linux, `notify-send` is used for desktop notifications unless
   `PROJMUX_NOTIFY_HOOK` is set.
 
 ## Install
@@ -123,6 +125,11 @@ export PROJMUX_NOTIFY_HOOK="$HOME/.local/bin/projmux-notify"
 The hook receives seven arguments: summary, body, urgency, app name, tag, group,
 and icon path. When this variable is set, projmux uses the hook instead of its
 built-in desktop notification sender.
+
+On WSL, the built-in sender targets Windows toast notifications through
+`powershell.exe`. `projmux` attempts to register the `projmux.TmuxCodex`
+AppUserModelID automatically so the toast channel has a stable display name in
+Windows notification settings.
 
 That is enough to use the standalone app path. `projmux shell` generates its own
 tmux config and does not require an existing `.tmux.conf` include, zsh framework,

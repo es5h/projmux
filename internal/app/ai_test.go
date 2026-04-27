@@ -3,6 +3,8 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,6 +14,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	intfzf "github.com/es5h/projmux/internal/ui/fzf"
 )
@@ -494,6 +497,99 @@ func TestAIStatusSetWaitingUsesNotificationHook(t *testing.T) {
 	}
 	if containsAICommand(commands, "notify-send") {
 		t.Fatalf("commands = %#v, did not expect notify-send with notification hook", commands)
+	}
+}
+
+func TestAIStatusSetWaitingInWSLRegistersToastAppIDAndDispatchesToast(t *testing.T) {
+	home := t.TempDir()
+	work := filepath.Join(home, "projmux")
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	psPath := "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+	cmd := testAICommand(home)
+	cmd.now = func() time.Time { return time.Unix(1000, 0) }
+	cmd.lookupEnv = func(name string) string {
+		switch name {
+		case "HOME":
+			return home
+		case "WSL_DISTRO_NAME":
+			return "Ubuntu-24.04"
+		default:
+			return ""
+		}
+	}
+	cmd.readCommand = func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if name == "command" && len(args) == 2 && args[0] == "-v" {
+			switch args[1] {
+			case "powershell.exe":
+				return []byte(psPath + "\n"), nil
+			case "wsl-notify-send.exe":
+				return nil, os.ErrNotExist
+			}
+		}
+		if name == "git" {
+			switch {
+			case reflect.DeepEqual(args, []string{"-C", work, "rev-parse", "--is-inside-work-tree"}):
+				return []byte("true\n"), nil
+			case reflect.DeepEqual(args, []string{"-C", work, "symbolic-ref", "--quiet", "--short", "HEAD"}):
+				return []byte("main\n"), nil
+			}
+			return nil, os.ErrNotExist
+		}
+		if name != "tmux" {
+			return nil, os.ErrNotExist
+		}
+		switch {
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#{pane_title}"}):
+			return []byte("Codex: approval needed\n"), nil
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#{@projmux_desktop_notified}"}),
+			reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#{@projmux_desktop_notification_key}"}),
+			reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#{@projmux_desktop_notification_at}"}):
+			return []byte("\n"), nil
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#S"}):
+			return []byte("repo\n"), nil
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#W"}):
+			return []byte("dev\n"), nil
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#{pane_current_path}"}):
+			return []byte(work + "\n"), nil
+		case reflect.DeepEqual(args, []string{"display-message", "-p", "-t", "%2", "#{pane_active}"}):
+			return []byte("0\n"), nil
+		}
+		return nil, os.ErrNotExist
+	}
+
+	if err := cmd.Run([]string{"status", "set", "waiting", "%2"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Run status set waiting error = %v", err)
+	}
+
+	var powershellCommands []recordedAICommand
+	for _, command := range cmdRecorder(cmd).commands {
+		if command.name == psPath {
+			powershellCommands = append(powershellCommands, command)
+		}
+	}
+	if got, want := len(powershellCommands), 2; got != want {
+		t.Fatalf("powershell commands len = %d, want %d, commands = %#v", got, want, cmdRecorder(cmd).commands)
+	}
+	registerScript := decodePowerShellEncodedCommand(t, powershellCommands[0])
+	if !strings.Contains(registerScript, `HKCU:\SOFTWARE\Classes\AppUserModelId\projmux.TmuxCodex`) {
+		t.Fatalf("register script = %q, want AppUserModelId registration", registerScript)
+	}
+	if !strings.Contains(registerScript, "Tmux Codex") {
+		t.Fatalf("register script = %q, want display name", registerScript)
+	}
+	toastScript := decodePowerShellEncodedCommand(t, powershellCommands[1])
+	for _, want := range []string{
+		"CreateToastNotifier('projmux.TmuxCodex').Show($toast)",
+		"$toast.Tag = '%2'",
+		"$toast.Group = 'repo'",
+		"Codex 승인 필요 · approval needed",
+		"검토 대기: approval needed · projmux/main",
+	} {
+		if !strings.Contains(toastScript, want) {
+			t.Fatalf("toast script = %q, want substring %q", toastScript, want)
+		}
 	}
 }
 
@@ -1036,7 +1132,8 @@ func testAICommand(home string) *aiCommand {
 				return ""
 			}
 		},
-		homeDir: func() (string, error) { return home, nil },
+		homeDir:  func() (string, error) { return home, nil },
+		readFile: func(string) ([]byte, error) { return nil, os.ErrNotExist },
 		runCommand: func(_ context.Context, name string, args ...string) error {
 			recorder.commands = append(recorder.commands, recordedAICommand{name: name, args: append([]string(nil), args...)})
 			return nil
@@ -1092,6 +1189,26 @@ func containsAICommandArgs(commands []recordedAICommand, name string, prefix []s
 		}
 	}
 	return false
+}
+
+func decodePowerShellEncodedCommand(t *testing.T, command recordedAICommand) string {
+	t.Helper()
+	if len(command.args) < 4 {
+		t.Fatalf("powershell args = %#v, want encoded command", command.args)
+	}
+	encoded := command.args[len(command.args)-1]
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("decode base64 error = %v", err)
+	}
+	if len(decoded)%2 != 0 {
+		t.Fatalf("decoded powershell bytes len = %d, want even", len(decoded))
+	}
+	words := make([]uint16, 0, len(decoded)/2)
+	for i := 0; i < len(decoded); i += 2 {
+		words = append(words, binary.LittleEndian.Uint16(decoded[i:i+2]))
+	}
+	return string(utf16.Decode(words))
 }
 
 func writeExecutable(t *testing.T, path string) string {

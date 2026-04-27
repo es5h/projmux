@@ -63,6 +63,8 @@ projmux shell
 - 생성되는 앱 tmux 설정은 zsh를 기본 shell로 사용합니다.
 - git branch/status metadata 표시를 위한 git.
 - kubectl은 선택 사항이며 Kubernetes status segment가 필요할 때만 사용합니다.
+- WSL에서는 가능할 때 `powershell.exe`를 통해 Windows toast notification을
+  보내고, 첫 사용 시 toast AppUserModelID를 자동 등록합니다.
 - Linux desktop notification은 기본적으로 `notify-send`를 사용하며,
   `PROJMUX_NOTIFY_HOOK`을 설정하면 별도 실행 파일로 보낼 수 있습니다.
 
@@ -122,6 +124,10 @@ export PROJMUX_NOTIFY_HOOK="$HOME/.local/bin/projmux-notify"
 hook은 summary, body, urgency, app name, tag, group, icon path 순서로 7개
 인자를 받습니다. 이 변수가 설정되어 있으면 projmux는 내장 desktop notification
 sender 대신 hook을 사용합니다.
+
+WSL에서는 내장 sender가 `powershell.exe`를 통해 Windows toast notification을
+보냅니다. 이때 `projmux.TmuxCodex` AppUserModelID를 자동으로 등록해 Windows
+알림 설정에서 안정적인 표시 이름을 사용하려고 시도합니다.
 
 여기까지면 standalone 앱 경로를 사용할 준비가 끝납니다. `projmux shell`은 자체
 tmux 설정을 생성하므로 기존 `.tmux.conf` include나 zsh framework가 필요하지

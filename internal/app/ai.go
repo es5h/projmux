@@ -43,6 +43,7 @@ type aiCommand struct {
 	executable  func() (string, error)
 	lookupEnv   func(string) string
 	homeDir     func() (string, error)
+	readFile    func(string) ([]byte, error)
 	runCommand  func(ctx context.Context, name string, args ...string) error
 	readCommand func(ctx context.Context, name string, args ...string) ([]byte, error)
 	now         func() time.Time
@@ -55,6 +56,7 @@ func newAICommand() *aiCommand {
 		executable:  os.Executable,
 		lookupEnv:   os.Getenv,
 		homeDir:     os.UserHomeDir,
+		readFile:    os.ReadFile,
 		runCommand:  runExternalCommand,
 		readCommand: readExternalCommand,
 		now:         time.Now,
@@ -1041,7 +1043,11 @@ func (c *aiCommand) isWSL() bool {
 	if c.env("WSL_DISTRO_NAME") != "" {
 		return true
 	}
-	content, err := os.ReadFile("/proc/sys/kernel/osrelease")
+	readFile := c.readFile
+	if readFile == nil {
+		readFile = os.ReadFile
+	}
+	content, err := readFile("/proc/sys/kernel/osrelease")
 	return err == nil && strings.Contains(strings.ToLower(string(content)), "microsoft")
 }
 
@@ -1518,6 +1524,16 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
 ` + tagLine + `
 ` + groupLine + `
 [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('` + psEscape(appName) + `').Show($toast)
+`
+}
+
+func buildRegisterToastAppIDPowerShell(appID, displayName string) string {
+	return `$regPath = "HKCU:\SOFTWARE\Classes\AppUserModelId\` + psEscape(appID) + `"
+if (-not (Test-Path $regPath)) {
+  New-Item -Path $regPath -Force | Out-Null
+}
+Set-ItemProperty -Path $regPath -Name 'DisplayName' -Value '` + psEscape(displayName) + `' -Type String
+Set-ItemProperty -Path $regPath -Name 'ShowInSettings' -Value 1 -Type DWord
 `
 }
 
