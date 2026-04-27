@@ -105,7 +105,7 @@ func (c *tmuxCommand) runRebalancePanes(args []string, stderr io.Writer) error {
 	if err != nil {
 		return nil
 	}
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
 		windowID, paneCountText, ok := strings.Cut(line, "\t")
 		if !ok || strings.TrimSpace(windowID) == "" || parsePositiveInt(paneCountText) < 2 {
 			continue
