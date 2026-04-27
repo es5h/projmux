@@ -122,12 +122,12 @@ func (c *aiCommand) notificationIcon(agentName string) string {
 	switch strings.ToLower(strings.TrimSpace(agentName)) {
 	case "codex":
 		if c.isWSL() {
-			return c.ensureNotificationPNG("codex.png", codexNotificationIconPNG)
+			return c.ensureWSLNotificationPNG("codex.png", codexNotificationIconPNG)
 		}
 		return c.ensureNotificationIcon("codex.svg", codexNotificationIconSVG)
 	case "claude":
 		if c.isWSL() {
-			return c.ensureNotificationPNG("claude.png", claudeNotificationIconPNG)
+			return c.ensureWSLNotificationPNG("claude.png", claudeNotificationIconPNG)
 		}
 		return c.ensureNotificationIcon("claude.svg", claudeNotificationIconSVG)
 	default:
@@ -155,6 +155,19 @@ func (c *aiCommand) ensureNotificationIcon(name, content string) string {
 
 func (c *aiCommand) ensureNotificationPNG(name string, content []byte) string {
 	dir := c.notificationIconDir()
+	return writeNotificationPNG(dir, name, content)
+}
+
+func (c *aiCommand) ensureWSLNotificationPNG(name string, content []byte) string {
+	if dir := c.wslWindowsNotificationIconDir(); strings.TrimSpace(dir) != "" {
+		if path := writeNotificationPNG(dir, name, content); path != "dialog-information" {
+			return path
+		}
+	}
+	return c.ensureNotificationPNG(name, content)
+}
+
+func writeNotificationPNG(dir, name string, content []byte) string {
 	if strings.TrimSpace(dir) == "" {
 		return "dialog-information"
 	}
@@ -169,6 +182,31 @@ func (c *aiCommand) ensureNotificationPNG(name string, content []byte) string {
 		return "dialog-information"
 	}
 	return path
+}
+
+func (c *aiCommand) wslWindowsNotificationIconDir() string {
+	if override := strings.TrimSpace(c.env("PROJMUX_WSL_TOAST_ICON_DIR")); override != "" {
+		return filepath.Join(override, "projmux", "icons")
+	}
+	powerShell := c.resolvePowerShell()
+	if powerShell == "" {
+		return ""
+	}
+	localAppDataWin := c.readTrimmed(
+		powerShell,
+		"-NoProfile",
+		"-NonInteractive",
+		"-Command",
+		"[Environment]::GetFolderPath('LocalApplicationData')",
+	)
+	if localAppDataWin == "" {
+		return ""
+	}
+	localAppDataWSL := c.readTrimmed("wslpath", "-u", localAppDataWin)
+	if localAppDataWSL == "" {
+		return ""
+	}
+	return filepath.Join(localAppDataWSL, "projmux", "icons")
 }
 
 func (c *aiCommand) wslToastIconPath(iconPath string) string {

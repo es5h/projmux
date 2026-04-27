@@ -507,7 +507,10 @@ func TestAIStatusSetWaitingInWSLRegistersToastAppIDAndDispatchesToast(t *testing
 		t.Fatal(err)
 	}
 	psPath := "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
-	iconUNC := `\\wsl.localhost\Ubuntu-24.04\` + strings.ReplaceAll(filepath.Join(home, ".local", "share", "projmux", "icons", "codex.png"), "/", `\`)
+	localAppDataWin := `C:\Users\me\AppData\Local`
+	localAppDataWSL := filepath.Join(home, "windows-localappdata")
+	iconWSL := filepath.Join(localAppDataWSL, "projmux", "icons", "codex.png")
+	iconWin := `C:\Users\me\AppData\Local\projmux\icons\codex.png`
 	cmd := testAICommand(home)
 	cmd.now = func() time.Time { return time.Unix(1000, 0) }
 	cmd.lookupEnv = func(name string) string {
@@ -529,8 +532,14 @@ func TestAIStatusSetWaitingInWSLRegistersToastAppIDAndDispatchesToast(t *testing
 				return nil, os.ErrNotExist
 			}
 		}
-		if name == "wslpath" && reflect.DeepEqual(args, []string{"-w", filepath.Join(home, ".local", "share", "projmux", "icons", "codex.png")}) {
-			return []byte(iconUNC + "\n"), nil
+		if name == psPath && reflect.DeepEqual(args, []string{"-NoProfile", "-NonInteractive", "-Command", "[Environment]::GetFolderPath('LocalApplicationData')"}) {
+			return []byte(localAppDataWin + "\n"), nil
+		}
+		if name == "wslpath" && reflect.DeepEqual(args, []string{"-u", localAppDataWin}) {
+			return []byte(localAppDataWSL + "\n"), nil
+		}
+		if name == "wslpath" && reflect.DeepEqual(args, []string{"-w", iconWSL}) {
+			return []byte(iconWin + "\n"), nil
 		}
 		if name == "git" {
 			switch {
@@ -583,8 +592,17 @@ func TestAIStatusSetWaitingInWSLRegistersToastAppIDAndDispatchesToast(t *testing
 	if !strings.Contains(registerScript, "Tmux Codex") {
 		t.Fatalf("register script = %q, want display name", registerScript)
 	}
-	if !strings.Contains(registerScript, iconUNC) {
+	if !strings.Contains(registerScript, iconWin) {
 		t.Fatalf("register script = %q, want icon uri", registerScript)
+	}
+	for _, want := range []string{
+		"projmux Tmux Codex.lnk",
+		"Save($shortcutPath, $targetPath, $arguments, $description, $iconLocation, 'projmux.TmuxCodex')",
+		"shellLink.SetPath(targetPath)",
+	} {
+		if !strings.Contains(registerScript, want) {
+			t.Fatalf("register script = %q, want substring %q", registerScript, want)
+		}
 	}
 	toastScript := decodePowerShellEncodedCommand(t, powershellCommands[1])
 	for _, want := range []string{
@@ -593,12 +611,15 @@ func TestAIStatusSetWaitingInWSLRegistersToastAppIDAndDispatchesToast(t *testing
 		"$toast.Group = 'repo'",
 		"Codex 승인 필요 · approval needed",
 		"검토 대기: approval needed · projmux/main",
-		iconUNC,
+		iconWin,
 		"appLogoOverride",
 	} {
 		if !strings.Contains(toastScript, want) {
 			t.Fatalf("toast script = %q, want substring %q", toastScript, want)
 		}
+	}
+	if _, err := os.Stat(iconWSL); err != nil {
+		t.Fatalf("icon path %q missing: %v", iconWSL, err)
 	}
 }
 

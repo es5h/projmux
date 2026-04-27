@@ -1553,12 +1553,143 @@ func buildRegisterToastAppIDPowerShell(appID, displayName, iconURI string) strin
 		iconLine = "Set-ItemProperty -Path $regPath -Name 'IconUri' -Value '" + psEscape(iconURI) + "' -Type String"
 	}
 	return `$regPath = "HKCU:\SOFTWARE\Classes\AppUserModelId\` + psEscape(appID) + `"
+Add-Type -Language CSharp @"
+using System;
+using System.Runtime.InteropServices;
+
+[ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+internal class ShellLink
+{
+}
+
+[ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214F9-0000-0000-C000-000000000046")]
+internal interface IShellLinkW
+{
+    void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder pszFile, int cch, IntPtr pfd, uint fFlags);
+    void GetIDList(out IntPtr ppidl);
+    void SetIDList(IntPtr pidl);
+    void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder pszName, int cch);
+    void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string pszName);
+    void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder pszDir, int cch);
+    void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string pszDir);
+    void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder pszArgs, int cch);
+    void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string pszArgs);
+    void GetHotkey(out short pwHotkey);
+    void SetHotkey(short wHotkey);
+    void GetShowCmd(out int piShowCmd);
+    void SetShowCmd(int iShowCmd);
+    void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] System.Text.StringBuilder pszIconPath, int cch, out int piIcon);
+    void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string pszIconPath, int iIcon);
+    void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string pszPathRel, uint dwReserved);
+    void Resolve(IntPtr hwnd, uint fFlags);
+    void SetPath([MarshalAs(UnmanagedType.LPWStr)] string pszFile);
+}
+
+[ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("0000010b-0000-0000-C000-000000000046")]
+internal interface IPersistFile
+{
+    void GetClassID(out Guid pClassID);
+    [PreserveSig] int IsDirty();
+    void Load([MarshalAs(UnmanagedType.LPWStr)] string pszFileName, uint dwMode);
+    void Save([MarshalAs(UnmanagedType.LPWStr)] string pszFileName, bool fRemember);
+    void SaveCompleted([MarshalAs(UnmanagedType.LPWStr)] string pszFileName);
+    void GetCurFile([MarshalAs(UnmanagedType.LPWStr)] out string ppszFileName);
+}
+
+[ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
+internal interface IPropertyStore
+{
+    uint GetCount(out uint cProps);
+    uint GetAt(uint iProp, out PROPERTYKEY pkey);
+    uint GetValue(ref PROPERTYKEY key, [Out] PROPVARIANT pv);
+    uint SetValue(ref PROPERTYKEY key, PROPVARIANT pv);
+    uint Commit();
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 4)]
+internal struct PROPERTYKEY
+{
+    public Guid fmtid;
+    public uint pid;
+
+    public PROPERTYKEY(string formatId, uint propertyId)
+    {
+        fmtid = new Guid(formatId);
+        pid = propertyId;
+    }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal sealed class PROPVARIANT : IDisposable
+{
+    private ushort vt;
+    private ushort wReserved1;
+    private ushort wReserved2;
+    private ushort wReserved3;
+    private IntPtr value;
+    private int value2;
+
+    public PROPVARIANT(string text)
+    {
+        vt = 31;
+        value = Marshal.StringToCoTaskMemUni(text);
+    }
+
+    public void Dispose()
+    {
+        PropVariantClear(this);
+        GC.SuppressFinalize(this);
+    }
+
+    ~PROPVARIANT()
+    {
+        Dispose();
+    }
+
+    [DllImport("ole32.dll")]
+    private static extern int PropVariantClear([In, Out] PROPVARIANT propVariant);
+}
+
+public static class ProjmuxToastShortcut
+{
+    public static void Save(string shortcutPath, string targetPath, string arguments, string description, string iconLocation, string appId)
+    {
+        var shellLink = (IShellLinkW)new ShellLink();
+        shellLink.SetPath(targetPath);
+        shellLink.SetArguments(arguments);
+        shellLink.SetDescription(description);
+        if (!string.IsNullOrWhiteSpace(iconLocation))
+        {
+            shellLink.SetIconLocation(iconLocation, 0);
+        }
+        var persist = (IPersistFile)shellLink;
+        var store = (IPropertyStore)shellLink;
+        var key = new PROPERTYKEY("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3", 5);
+        using (var value = new PROPVARIANT(appId))
+        {
+            store.SetValue(ref key, value);
+        }
+        store.Commit();
+        persist.Save(shortcutPath, true);
+    }
+}
+"@
 if (-not (Test-Path $regPath)) {
   New-Item -Path $regPath -Force | Out-Null
 }
 Set-ItemProperty -Path $regPath -Name 'DisplayName' -Value '` + psEscape(displayName) + `' -Type String
 Set-ItemProperty -Path $regPath -Name 'ShowInSettings' -Value 1 -Type DWord
 ` + iconLine + `
+$shortcutDir = [Environment]::GetFolderPath('Programs')
+$shortcutPath = Join-Path $shortcutDir 'projmux Tmux Codex.lnk'
+$targetPath = [Environment]::ExpandEnvironmentVariables('%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe')
+$arguments = '-NoProfile -WindowStyle Hidden -Command exit'
+$description = 'projmux tmux AI notifications'
+$iconLocation = ''
+if ('` + psEscape(iconURI) + `' -ne '') {
+  $iconLocation = '` + psEscape(iconURI) + `'
+}
+[ProjmuxToastShortcut]::Save($shortcutPath, $targetPath, $arguments, $description, $iconLocation, '` + psEscape(appID) + `')
 `
 }
 
