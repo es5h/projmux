@@ -260,7 +260,7 @@ projmux status kube [session]
 ## 릴리스
 
 `v*` tag가 push되면 GitHub Actions가 release archive를 게시합니다. 현재 앱 기준
-baseline release는 `v0.1.1`입니다.
+baseline release는 `v0.2.0`입니다.
 
 ## 프로젝트 탐색 방식
 
