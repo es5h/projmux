@@ -1,10 +1,12 @@
 package config
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -12,6 +14,7 @@ const (
 	PinsFileName         = "pins"
 	TagsFileName         = "tags"
 	PreviewStateFileName = "preview-state"
+	ProjdirFileName      = "projdir"
 )
 
 var ErrHomeDirRequired = errors.New("home directory is required when XDG homes are unset")
@@ -51,6 +54,97 @@ func (p Paths) TagFile() string {
 // PreviewStateFile returns the default file used for persistent preview state.
 func (p Paths) PreviewStateFile() string {
 	return filepath.Join(p.StateDir, PreviewStateFileName)
+}
+
+// ProjdirFile returns the default file used for the persisted PROJDIR value.
+func (p Paths) ProjdirFile() string {
+	return filepath.Join(p.ConfigDir, ProjdirFileName)
+}
+
+// ProjdirFile returns the path to the persisted PROJDIR file rooted at the
+// supplied home directory. An empty homeDir yields an empty string.
+func ProjdirFile(homeDir string) string {
+	if homeDir == "" {
+		return ""
+	}
+	return filepath.Join(homeDir, ".config", AppName, ProjdirFileName)
+}
+
+// LoadProjdir returns the trimmed first line of the persisted PROJDIR file
+// rooted at homeDir. A missing file or empty content yields ("", nil).
+func LoadProjdir(homeDir string) (string, error) {
+	path := ProjdirFile(homeDir)
+	if path == "" {
+		return "", nil
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("open projdir file: %w", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	if scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if err := scanner.Err(); err != nil {
+			return "", fmt.Errorf("read projdir file: %w", err)
+		}
+		return line, nil
+	}
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("read projdir file: %w", err)
+	}
+	return "", nil
+}
+
+// SaveProjdir persists value to the PROJDIR file rooted at homeDir using an
+// atomic rename. An empty value removes the file. The parent directory is
+// created with 0o755 if missing.
+func SaveProjdir(homeDir, value string) error {
+	path := ProjdirFile(homeDir)
+	if path == "" {
+		return ErrHomeDirRequired
+	}
+
+	value = strings.TrimSpace(value)
+	if value == "" {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove projdir file: %w", err)
+		}
+		return nil
+	}
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create projdir directory: %w", err)
+	}
+
+	tmp, err := os.CreateTemp(dir, ProjdirFileName+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("create projdir temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() {
+		_ = os.Remove(tmpName)
+	}()
+
+	if _, err := tmp.WriteString(value + "\n"); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write projdir temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close projdir temp file: %w", err)
+	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		return fmt.Errorf("chmod projdir temp file: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("rename projdir temp file: %w", err)
+	}
+	return nil
 }
 
 // Paths resolves the effective XDG-style projmux directories from the provided

@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -89,6 +90,135 @@ func TestHomesPathsRequiresHomeDirWhenFallbackNeeded(t *testing.T) {
 	}.Paths()
 	if !errors.Is(err, ErrHomeDirRequired) {
 		t.Fatalf("Paths() error = %v, want %v", err, ErrHomeDirRequired)
+	}
+}
+
+func TestPathsProjdirFile(t *testing.T) {
+	t.Parallel()
+
+	paths := Paths{ConfigDir: "/tmp/config/projmux"}
+	if got, want := paths.ProjdirFile(), filepath.Join(paths.ConfigDir, ProjdirFileName); got != want {
+		t.Fatalf("ProjdirFile() = %q, want %q", got, want)
+	}
+}
+
+func TestProjdirFile(t *testing.T) {
+	t.Parallel()
+
+	if got := ProjdirFile(""); got != "" {
+		t.Fatalf("ProjdirFile(\"\") = %q, want empty", got)
+	}
+	want := filepath.Join("/home/tester", ".config", AppName, ProjdirFileName)
+	if got := ProjdirFile("/home/tester"); got != want {
+		t.Fatalf("ProjdirFile() = %q, want %q", got, want)
+	}
+}
+
+func TestLoadProjdirMissingFile(t *testing.T) {
+	t.Parallel()
+
+	home := t.TempDir()
+	got, err := LoadProjdir(home)
+	if err != nil {
+		t.Fatalf("LoadProjdir() error = %v", err)
+	}
+	if got != "" {
+		t.Fatalf("LoadProjdir() = %q, want empty", got)
+	}
+}
+
+func TestSaveAndLoadProjdirRoundtrip(t *testing.T) {
+	t.Parallel()
+
+	home := t.TempDir()
+	if err := SaveProjdir(home, "/work/repos"); err != nil {
+		t.Fatalf("SaveProjdir() error = %v", err)
+	}
+
+	got, err := LoadProjdir(home)
+	if err != nil {
+		t.Fatalf("LoadProjdir() error = %v", err)
+	}
+	if got != "/work/repos" {
+		t.Fatalf("LoadProjdir() = %q, want %q", got, "/work/repos")
+	}
+}
+
+func TestSaveProjdirCreatesParentDir(t *testing.T) {
+	t.Parallel()
+
+	home := t.TempDir()
+	if err := SaveProjdir(home, "/srv/projects"); err != nil {
+		t.Fatalf("SaveProjdir() error = %v", err)
+	}
+
+	dir := filepath.Join(home, ".config", AppName)
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("Stat() error = %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("expected %q to be a directory", dir)
+	}
+}
+
+func TestSaveProjdirEmptyValueRemovesFile(t *testing.T) {
+	t.Parallel()
+
+	home := t.TempDir()
+	if err := SaveProjdir(home, "/initial"); err != nil {
+		t.Fatalf("SaveProjdir() initial error = %v", err)
+	}
+
+	if err := SaveProjdir(home, ""); err != nil {
+		t.Fatalf("SaveProjdir() empty error = %v", err)
+	}
+
+	if _, err := os.Stat(ProjdirFile(home)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Stat() error = %v, want ErrNotExist", err)
+	}
+}
+
+func TestSaveProjdirEmptyMissingFileNoOp(t *testing.T) {
+	t.Parallel()
+
+	home := t.TempDir()
+	if err := SaveProjdir(home, ""); err != nil {
+		t.Fatalf("SaveProjdir() empty error = %v", err)
+	}
+
+	if _, err := os.Stat(ProjdirFile(home)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Stat() error = %v, want ErrNotExist", err)
+	}
+}
+
+func TestLoadProjdirTrimsAndUsesFirstLine(t *testing.T) {
+	t.Parallel()
+
+	home := t.TempDir()
+	dir := filepath.Join(home, ".config", AppName)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	contents := "  /first/line  \n/second/line\n"
+	if err := os.WriteFile(filepath.Join(dir, ProjdirFileName), []byte(contents), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	got, err := LoadProjdir(home)
+	if err != nil {
+		t.Fatalf("LoadProjdir() error = %v", err)
+	}
+	if got != "/first/line" {
+		t.Fatalf("LoadProjdir() = %q, want %q", got, "/first/line")
+	}
+}
+
+func TestSaveProjdirRequiresHomeDir(t *testing.T) {
+	t.Parallel()
+
+	if err := SaveProjdir("", "/anything"); !errors.Is(err, ErrHomeDirRequired) {
+		t.Fatalf("SaveProjdir() error = %v, want %v", err, ErrHomeDirRequired)
 	}
 }
 

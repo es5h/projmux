@@ -34,6 +34,7 @@ const (
 	managedRootsEnvVar       = "PROJMUX_MANAGED_ROOTS"
 	legacyManagedRootsEnvVar = "TMUX_SESSIONIZER_ROOTS"
 	repoRootEnvVar           = "RP"
+	projdirEnvVar            = "PROJDIR"
 )
 
 var switchPinHiddenWhitelist = []string{
@@ -110,6 +111,8 @@ type switchCommand struct {
 	lookupEnv       func(string) string
 	gitBranch       func(string) string
 	kubeInfo        func(sessionName string) switchKubeInfo
+	loadProjdir     func(homeDir string) (string, error)
+	saveProjdir     func(homeDir, value string) error
 	focusSession    string
 }
 
@@ -152,6 +155,8 @@ func newSwitchCommand() *switchCommand {
 		lookupEnv:   os.Getenv,
 		gitBranch:   detectGitBranch,
 		kubeInfo:    defaultSwitchKubeInfo,
+		loadProjdir: config.LoadProjdir,
+		saveProjdir: config.SaveProjdir,
 	}
 	if pathsErr != nil {
 		cmd.previewStoreErr = fmt.Errorf("resolve default config paths: %w", pathsErr)
@@ -882,17 +887,73 @@ func (c *switchCommand) originSession() string {
 }
 
 func (c *switchCommand) switchRepoRoot(homeDir string) string {
-	return switchRepoRoot(homeDir, c.lookupEnv)
+	return switchRepoRoot(homeDir, c.lookupEnv, c.loadProjdir, c.saveProjdir)
 }
 
-func switchRepoRoot(homeDir string, lookup func(string) string) string {
-	if repoRoot := cleanOptionalPath(envValue(lookup, repoRootEnvVar)); repoRoot != "" {
-		return repoRoot
+func switchRepoRoot(
+	homeDir string,
+	lookup func(string) string,
+	load func(string) (string, error),
+	save func(string, string) error,
+) string {
+	envRaw, envSource := preferredProjdirEnv(lookup)
+	if envSource != "" {
+		repoRoot := cleanOptionalPath(envRaw)
+		if repoRoot != "" {
+			memoizeProjdir(homeDir, envRaw, load, save)
+			return repoRoot
+		}
 	}
+
+	if load != nil && homeDir != "" {
+		if saved, err := load(homeDir); err == nil {
+			if repoRoot := cleanOptionalPath(saved); repoRoot != "" {
+				return repoRoot
+			}
+		}
+	}
+
 	if homeDir == "" {
 		return ""
 	}
 	return cleanOptionalPath(filepath.Join(homeDir, "source", "repos"))
+}
+
+// preferredProjdirEnv returns the effective env value for the repo root and
+// the variable name that supplied it ($PROJDIR takes precedence over $RP).
+// An empty source string means neither variable was set.
+func preferredProjdirEnv(lookup func(string) string) (string, string) {
+	for _, name := range []string{projdirEnvVar, repoRootEnvVar} {
+		raw := envValue(lookup, name)
+		if strings.TrimSpace(raw) == "" {
+			continue
+		}
+		return raw, name
+	}
+	return "", ""
+}
+
+// memoizeProjdir best-effort persists value to the saved-projdir file. It
+// skips work when the saved value already matches and swallows errors so
+// command exit codes are unaffected.
+func memoizeProjdir(
+	homeDir, value string,
+	load func(string) (string, error),
+	save func(string, string) error,
+) {
+	if save == nil || homeDir == "" {
+		return
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+	if load != nil {
+		if saved, err := load(homeDir); err == nil && strings.TrimSpace(saved) == value {
+			return
+		}
+	}
+	_ = save(homeDir, value)
 }
 
 func switchManagedRoots(homeDir, repoRoot string, lookup func(string) string) []string {
