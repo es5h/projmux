@@ -888,6 +888,17 @@ func (c *switchCommand) originSession() string {
 	return strings.TrimSpace(c.env(switchContextSessionEnv))
 }
 
+// projdirSource labels the origin of a resolved repo root for display in
+// settings. Strings are stable identifiers (also used by tests).
+const (
+	projdirSourcePROJDIRenv = "PROJDIR env"
+	projdirSourceTmuxOption = "@projmux_projdir tmux"
+	projdirSourceRPEnv      = "RP env"
+	projdirSourceSaved      = "saved"
+	projdirSourceDefault    = "default"
+	projdirSourceUnresolved = ""
+)
+
 func (c *switchCommand) switchRepoRoot(homeDir string) string {
 	return switchRepoRoot(homeDir, c.lookupEnv, c.tmuxProjdir, c.loadProjdir, c.saveProjdir)
 }
@@ -899,40 +910,70 @@ func switchRepoRoot(
 	load func(string) (string, error),
 	save func(string, string) error,
 ) string {
+	value, source := resolveProjdir(homeDir, lookup, tmuxOption, load)
+	switch source {
+	case projdirSourcePROJDIRenv, projdirSourceRPEnv:
+		memoizeProjdir(homeDir, value, load, save)
+	}
+	return value
+}
+
+// resolveProjdir applies the same priority chain as switchRepoRoot but is
+// side-effect free: it does not memoize. Returns the resolved cleaned path
+// and a label identifying the source that supplied it. When no source
+// produces a value (e.g. empty home with no env), the returned source is
+// projdirSourceUnresolved and value is empty.
+func resolveProjdir(
+	homeDir string,
+	lookup func(string) string,
+	tmuxOption func() string,
+	load func(string) (string, error),
+) (string, string) {
 	if raw := envValue(lookup, projdirEnvVar); strings.TrimSpace(raw) != "" {
 		if repoRoot := cleanOptionalPath(raw); repoRoot != "" {
-			memoizeProjdir(homeDir, raw, load, save)
-			return repoRoot
+			return repoRoot, projdirSourcePROJDIRenv
 		}
 	}
 
 	if tmuxOption != nil {
 		if raw := strings.TrimSpace(tmuxOption()); raw != "" {
 			if repoRoot := cleanOptionalPath(raw); repoRoot != "" {
-				return repoRoot
+				return repoRoot, projdirSourceTmuxOption
 			}
 		}
 	}
 
 	if raw := envValue(lookup, repoRootEnvVar); strings.TrimSpace(raw) != "" {
 		if repoRoot := cleanOptionalPath(raw); repoRoot != "" {
-			memoizeProjdir(homeDir, raw, load, save)
-			return repoRoot
+			return repoRoot, projdirSourceRPEnv
 		}
 	}
 
 	if load != nil && homeDir != "" {
 		if saved, err := load(homeDir); err == nil {
 			if repoRoot := cleanOptionalPath(saved); repoRoot != "" {
-				return repoRoot
+				return repoRoot, projdirSourceSaved
 			}
 		}
 	}
 
 	if homeDir == "" {
-		return ""
+		return "", projdirSourceUnresolved
 	}
-	return cleanOptionalPath(filepath.Join(homeDir, "source", "repos"))
+	return cleanOptionalPath(filepath.Join(homeDir, "source", "repos")), projdirSourceDefault
+}
+
+// currentProjdirInfo returns the currently resolved repo root path and the
+// label of the source that supplied it, without performing memoization.
+// Callers (e.g. settings UX) use this to surface the value to the user as
+// a read-only preview.
+func (c *switchCommand) currentProjdirInfo() (string, string, error) {
+	homeDir, err := c.resolveHomeDir()
+	if err != nil {
+		return "", "", err
+	}
+	value, source := resolveProjdir(homeDir, c.lookupEnv, c.tmuxProjdir, c.loadProjdir)
+	return value, source, nil
 }
 
 // preferredProjdirEnv returns the effective env value for the repo root and

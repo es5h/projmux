@@ -347,6 +347,145 @@ func testSettingsSwitchCommandWithHome(t *testing.T, home string, store *stubSwi
 	}
 }
 
+func TestCurrentProjdirInfoSourcePriority(t *testing.T) {
+	t.Parallel()
+
+	const home = "/home/tester"
+	tests := []struct {
+		name       string
+		lookup     func(string) string
+		tmuxOption func() string
+		load       func(string) (string, error)
+		wantValue  string
+		wantSource string
+	}{
+		{
+			name: "PROJDIR env wins",
+			lookup: func(name string) string {
+				switch name {
+				case projdirEnvVar:
+					return "/from/projdir"
+				case repoRootEnvVar:
+					return "/from/rp"
+				}
+				return ""
+			},
+			tmuxOption: func() string { return "/from/tmux" },
+			load:       func(string) (string, error) { return "/from/saved", nil },
+			wantValue:  "/from/projdir",
+			wantSource: projdirSourcePROJDIRenv,
+		},
+		{
+			name: "tmux option used when PROJDIR empty",
+			lookup: func(name string) string {
+				if name == repoRootEnvVar {
+					return "/from/rp"
+				}
+				return ""
+			},
+			tmuxOption: func() string { return "/from/tmux" },
+			load:       func(string) (string, error) { return "/from/saved", nil },
+			wantValue:  "/from/tmux",
+			wantSource: projdirSourceTmuxOption,
+		},
+		{
+			name: "RP env used when PROJDIR and tmux empty",
+			lookup: func(name string) string {
+				if name == repoRootEnvVar {
+					return "/from/rp"
+				}
+				return ""
+			},
+			tmuxOption: emptyTmuxOption,
+			load:       func(string) (string, error) { return "/from/saved", nil },
+			wantValue:  "/from/rp",
+			wantSource: projdirSourceRPEnv,
+		},
+		{
+			name:       "saved file used when env unset",
+			lookup:     func(string) string { return "" },
+			tmuxOption: emptyTmuxOption,
+			load:       func(string) (string, error) { return "/from/saved", nil },
+			wantValue:  "/from/saved",
+			wantSource: projdirSourceSaved,
+		},
+		{
+			name:       "default fallback when nothing set",
+			lookup:     func(string) string { return "" },
+			tmuxOption: emptyTmuxOption,
+			load:       func(string) (string, error) { return "", nil },
+			wantValue:  filepath.Clean(filepath.Join(home, "source", "repos")),
+			wantSource: projdirSourceDefault,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			saveCalls := 0
+			cmd := &switchCommand{
+				homeDir:     func() (string, error) { return home, nil },
+				lookupEnv:   tc.lookup,
+				tmuxProjdir: tc.tmuxOption,
+				loadProjdir: tc.load,
+				saveProjdir: func(string, string) error {
+					saveCalls++
+					return nil
+				},
+			}
+
+			value, source, err := cmd.currentProjdirInfo()
+			if err != nil {
+				t.Fatalf("currentProjdirInfo() error = %v", err)
+			}
+			if value != tc.wantValue {
+				t.Fatalf("value = %q, want %q", value, tc.wantValue)
+			}
+			if source != tc.wantSource {
+				t.Fatalf("source = %q, want %q", source, tc.wantSource)
+			}
+			if saveCalls != 0 {
+				t.Fatalf("save calls = %d, want 0 (currentProjdirInfo must not memoize)", saveCalls)
+			}
+		})
+	}
+}
+
+func TestProjectPickerEntriesIncludesProjdirRow(t *testing.T) {
+	t.Parallel()
+
+	const home = "/home/tester"
+	cmd := &settingsCommand{
+		switcher: &switchCommand{
+			homeDir: func() (string, error) { return home, nil },
+			lookupEnv: func(name string) string {
+				if name == projdirEnvVar {
+					return "/from/projdir"
+				}
+				return ""
+			},
+			tmuxProjdir: emptyTmuxOption,
+			loadProjdir: func(string) (string, error) { return "", nil },
+			saveProjdir: func(string, string) error { return nil },
+		},
+	}
+
+	entries := cmd.projectPickerEntries()
+	if !hasEntryLabelContaining(entries, "Project Root") {
+		t.Fatalf("project picker entries = %#v, want Project Root row", entries)
+	}
+	if !hasEntryLabelContaining(entries, "/from/projdir") {
+		t.Fatalf("project picker entries = %#v, want resolved value in label", entries)
+	}
+	if !hasEntryLabelContaining(entries, "("+projdirSourcePROJDIRenv+")") {
+		t.Fatalf("project picker entries = %#v, want source label", entries)
+	}
+	if !hasEntryLabelContaining(entries, "Override via PROJDIR env") {
+		t.Fatalf("project picker entries = %#v, want override hint row", entries)
+	}
+}
+
 func hasEntryValue(entries []intfzf.Entry, value string) bool {
 	for _, entry := range entries {
 		if entry.Value == value {

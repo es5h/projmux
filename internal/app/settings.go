@@ -285,18 +285,49 @@ func (c *settingsCommand) runPinnedProjects(stdout, stderr io.Writer) error {
 func (c *settingsCommand) projectPickerEntries() []intfzf.Entry {
 	entries := []intfzf.Entry{
 		settingsBackEntry(),
-		{
-			Label: "\x1b[32m+ Add Project...\x1b[0m     \x1b[90mscan filesystem roots\x1b[0m",
-			Value: settingsProjectAdd,
-		},
 	}
 
+	entries = append(entries, c.projectRootEntry())
+	entries = append(entries, c.projectRootHintEntry())
+	entries = append(entries, intfzf.Entry{
+		Label: "\x1b[32m+ Add Project...\x1b[0m     \x1b[90mscan filesystem roots\x1b[0m",
+		Value: settingsProjectAdd,
+	})
 	entries = append(entries, c.addCurrentProjectEntry())
 	entries = append(entries, intfzf.Entry{
 		Label: "\x1b[36mPinned Projects\x1b[0m     \x1b[90mremove or clear pins\x1b[0m",
 		Value: settingsProjectPins,
 	})
 	return entries
+}
+
+// projectRootEntry renders the resolved PROJDIR path with its source label.
+// The row is read-only (settingsNoopValue) and never triggers memoization.
+func (c *settingsCommand) projectRootEntry() intfzf.Entry {
+	if c.switcher == nil {
+		return intfzf.Entry{
+			Label: "\x1b[90mProject Root       unavailable\x1b[0m",
+			Value: settingsNoopValue,
+		}
+	}
+	value, source, err := c.switcher.currentProjdirInfo()
+	if err != nil || value == "" {
+		return intfzf.Entry{
+			Label: "\x1b[90mProject Root       unavailable\x1b[0m",
+			Value: settingsNoopValue,
+		}
+	}
+	return intfzf.Entry{
+		Label: "\x1b[36mProject Root\x1b[0m       " + value + "  \x1b[90m(" + source + ")\x1b[0m",
+		Value: settingsNoopValue,
+	}
+}
+
+func (c *settingsCommand) projectRootHintEntry() intfzf.Entry {
+	return intfzf.Entry{
+		Label: "\x1b[90mOverride via PROJDIR env, set -g @projmux_projdir, or ~/.config/projmux/projdir\x1b[0m",
+		Value: settingsNoopValue,
+	}
 }
 
 func (c *settingsCommand) addCurrentProjectEntry() intfzf.Entry {
