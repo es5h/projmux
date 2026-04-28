@@ -877,7 +877,7 @@ func parseRecentSessionRows(output []byte) ([]recentSession, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse recent tmux sessions for %q: %w", strings.TrimSpace(fields[1]), errSessionActivityInvalid)
 		}
-		attached, err := parseBinaryFlag(fields[2], errSessionAttachedInvalid)
+		attached, err := parseAttachedFlag(fields[2])
 		if err != nil {
 			return nil, fmt.Errorf("parse recent tmux sessions for %q: %w", strings.TrimSpace(fields[1]), err)
 		}
