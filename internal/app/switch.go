@@ -1986,7 +1986,7 @@ func (c *switchCommand) filesystemPinEntries() ([]intfzf.Entry, error) {
 			continue
 		}
 		entries = append(entries, intfzf.Entry{
-			Label: intrender.PrettyPath(path, homeDir, repoRoot),
+			Label: settingsLabel(settingsGlyphAdd, settingsColorAdd, intrender.PrettyPath(path, homeDir, repoRoot), ""),
 			Value: "switch:add:" + path,
 		})
 	}
@@ -2022,7 +2022,7 @@ func (c *switchCommand) filesystemWorkdirEntries() ([]intfzf.Entry, error) {
 			continue
 		}
 		entries = append(entries, intfzf.Entry{
-			Label: intrender.PrettyPath(path, homeDir, repoRoot),
+			Label: settingsLabel(settingsGlyphAdd, settingsColorAdd, intrender.PrettyPath(path, homeDir, repoRoot), ""),
 			Value: "workdir:add:" + path,
 		})
 	}

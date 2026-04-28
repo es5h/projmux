@@ -132,15 +132,15 @@ func (c *settingsCommand) runPicker(options intfzf.Options) (intfzf.Result, erro
 func (c *settingsCommand) rootEntries() []intfzf.Entry {
 	return []intfzf.Entry{
 		{
-			Label: "\x1b[35mAI Settings\x1b[0m      \x1b[90mdefault split mode\x1b[0m",
+			Label: settingsLabel(settingsGlyphOpen, settingsColorType, "AI Settings", "default split mode"),
 			Value: settingsSectionAI,
 		},
 		{
-			Label: "\x1b[36mProject Picker\x1b[0m   \x1b[90mpinned projects and sidebar entries\x1b[0m",
+			Label: settingsLabel(settingsGlyphOpen, settingsColorType, "Project Picker", "pinned projects and sidebar entries"),
 			Value: settingsSectionProject,
 		},
 		{
-			Label: "\x1b[34mAbout\x1b[0m            \x1b[90mversion, source, common keys\x1b[0m",
+			Label: settingsLabel(settingsGlyphOpen, settingsColorType, "About", "version, source, common keys"),
 			Value: settingsSectionAbout,
 		},
 	}
@@ -312,7 +312,7 @@ func (c *settingsCommand) runAddWorkdir(stdout, stderr io.Writer) error {
 // directly. Useful for heavy WSL mounts (/mnt/c/Users/...), large NFS, etc.
 func settingsWorkdirTypedEntry() intfzf.Entry {
 	return intfzf.Entry{
-		Label: "\x1b[32m✏  Type path manually...\x1b[0m   \x1b[90m(skip filesystem scan)\x1b[0m",
+		Label: settingsLabel(settingsGlyphType, settingsColorType, "Type path manually...", "skip filesystem scan"),
 		Value: settingsWorkdirTyped,
 	}
 }
@@ -426,7 +426,7 @@ func (c *settingsCommand) workdirListEntries() ([]intfzf.Entry, error) {
 	entries := []intfzf.Entry{settingsBackEntry()}
 	if c.switcher == nil {
 		return append(entries, intfzf.Entry{
-			Label: "\x1b[90m(no saved workdirs)\x1b[0m",
+			Label: settingsLabelDim("(no saved workdirs)", ""),
 			Value: settingsNoopValue,
 		}), nil
 	}
@@ -438,13 +438,13 @@ func (c *settingsCommand) workdirListEntries() ([]intfzf.Entry, error) {
 
 	if len(saved) == 0 {
 		entries = append(entries, intfzf.Entry{
-			Label: "\x1b[90m(no saved workdirs)\x1b[0m",
+			Label: settingsLabelDim("(no saved workdirs)", ""),
 			Value: settingsNoopValue,
 		})
 	} else {
 		for _, dir := range saved {
 			entries = append(entries, intfzf.Entry{
-				Label: "x Remove  " + dir + "  \x1b[90m(saved)\x1b[0m",
+				Label: settingsLabel(settingsGlyphRemove, settingsColorRemove, "Remove", dir+"  (saved)"),
 				Value: settingsActionPrefixWorkdir + "remove:" + dir,
 			})
 		}
@@ -455,7 +455,7 @@ func (c *settingsCommand) workdirListEntries() ([]intfzf.Entry, error) {
 			continue
 		}
 		entries = append(entries, intfzf.Entry{
-			Label: "\x1b[90m" + src.Name + " = " + src.Value + "  (env, read-only)\x1b[0m",
+			Label: settingsLabelInfo(src.Name, src.Value, "env, read-only"),
 			Value: settingsNoopValue,
 		})
 	}
@@ -505,20 +505,20 @@ func (c *settingsCommand) projectPickerEntries() []intfzf.Entry {
 	entries = append(entries, c.projectRootEntry())
 	entries = append(entries, c.projectRootHintEntry())
 	entries = append(entries, intfzf.Entry{
-		Label: "\x1b[32m+ Add Project...\x1b[0m     \x1b[90mscan filesystem roots\x1b[0m",
+		Label: settingsLabel(settingsGlyphAdd, settingsColorAdd, "Add Project...", "scan filesystem roots"),
 		Value: settingsProjectAdd,
 	})
 	entries = append(entries, c.addCurrentProjectEntry())
 	entries = append(entries, intfzf.Entry{
-		Label: "\x1b[36mPinned Projects\x1b[0m     \x1b[90mremove or clear pins\x1b[0m",
+		Label: settingsLabel(settingsGlyphOpen, settingsColorType, "Pinned Projects", "remove or clear pins"),
 		Value: settingsProjectPins,
 	})
 	entries = append(entries, intfzf.Entry{
-		Label: "\x1b[32m+ Add Workdir...\x1b[0m     \x1b[90mappend a directory to the saved workdirs list\x1b[0m",
+		Label: settingsLabel(settingsGlyphAdd, settingsColorAdd, "Add Workdir...", "append a directory to the saved workdirs list"),
 		Value: settingsWorkdirAdd,
 	})
 	entries = append(entries, intfzf.Entry{
-		Label: "\x1b[36mWorkdirs\x1b[0m            \x1b[90mremove saved workdirs (env list takes priority)\x1b[0m",
+		Label: settingsLabel(settingsGlyphOpen, settingsColorType, "Workdirs", "remove saved workdirs (env list takes priority)"),
 		Value: settingsWorkdirList,
 	})
 	return entries
@@ -529,26 +529,28 @@ func (c *settingsCommand) projectPickerEntries() []intfzf.Entry {
 func (c *settingsCommand) projectRootEntry() intfzf.Entry {
 	if c.switcher == nil {
 		return intfzf.Entry{
-			Label: "\x1b[90mProject Root       unavailable\x1b[0m",
+			Label: settingsLabelDim("Project Root", "unavailable"),
 			Value: settingsNoopValue,
 		}
 	}
 	value, source, err := c.switcher.currentProjdirInfo()
 	if err != nil || value == "" {
 		return intfzf.Entry{
-			Label: "\x1b[90mProject Root       unavailable\x1b[0m",
+			Label: settingsLabelDim("Project Root", "unavailable"),
 			Value: settingsNoopValue,
 		}
 	}
 	return intfzf.Entry{
-		Label: "\x1b[36mProject Root\x1b[0m       " + value + "  \x1b[90m(" + source + ")\x1b[0m",
+		Label: settingsLabelInfo("Project Root", value, source),
 		Value: settingsNoopValue,
 	}
 }
 
 func (c *settingsCommand) projectRootHintEntry() intfzf.Entry {
+	// Keep the entire hint in one dim run so search substrings such as
+	// "Override via PROJDIR env" stay contiguous in the rendered label.
 	return intfzf.Entry{
-		Label: "\x1b[90mOverride via PROJDIR env, set -g @projmux_projdir, or ~/.config/projmux/projdir\x1b[0m",
+		Label: "  " + settingsColorDim + "Override via PROJDIR env, set -g @projmux_projdir, or ~/.config/projmux/projdir" + settingsColorReset,
 		Value: settingsNoopValue,
 	}
 }
@@ -556,7 +558,7 @@ func (c *settingsCommand) projectRootHintEntry() intfzf.Entry {
 func (c *settingsCommand) addCurrentProjectEntry() intfzf.Entry {
 	if c.switcher == nil {
 		return intfzf.Entry{
-			Label: "\x1b[90m+ Add Current Project  unavailable\x1b[0m",
+			Label: settingsLabelDim("Add Current Project", "unavailable"),
 			Value: settingsNoopValue,
 		}
 	}
@@ -564,14 +566,14 @@ func (c *settingsCommand) addCurrentProjectEntry() intfzf.Entry {
 	pins, err := c.switcher.loadPins()
 	if err != nil {
 		return intfzf.Entry{
-			Label: "\x1b[90m+ Add Current Project  pins unavailable\x1b[0m",
+			Label: settingsLabelDim("Add Current Project", "pins unavailable"),
 			Value: settingsNoopValue,
 		}
 	}
 	homeDir, err := c.switcher.resolveHomeDir()
 	if err != nil {
 		return intfzf.Entry{
-			Label: "\x1b[90m+ Add Current Project  home unavailable\x1b[0m",
+			Label: settingsLabelDim("Add Current Project", "home unavailable"),
 			Value: settingsNoopValue,
 		}
 	}
@@ -579,18 +581,18 @@ func (c *settingsCommand) addCurrentProjectEntry() intfzf.Entry {
 	currentTarget, err := c.switcher.resolveSwitchTarget(nil, "settings project picker")
 	if err != nil || currentTarget == "" || currentTarget == switchSettingsSentinel {
 		return intfzf.Entry{
-			Label: "\x1b[90m+ Add Current Project  no project context\x1b[0m",
+			Label: settingsLabelDim("Add Current Project", "no project context"),
 			Value: settingsNoopValue,
 		}
 	}
 	if containsString(pins, currentTarget) {
 		return intfzf.Entry{
-			Label: "\x1b[90m+ Add Current Project  already pinned  " + intrender.PrettyPath(currentTarget, homeDir, repoRoot) + "\x1b[0m",
+			Label: settingsLabelDim("Add Current Project", "already pinned  "+intrender.PrettyPath(currentTarget, homeDir, repoRoot)),
 			Value: settingsNoopValue,
 		}
 	}
 	return intfzf.Entry{
-		Label: "+ Add Current Project  " + intrender.PrettyPath(currentTarget, homeDir, repoRoot),
+		Label: settingsLabel(settingsGlyphAdd, settingsColorAdd, "Add Current Project", intrender.PrettyPath(currentTarget, homeDir, repoRoot)),
 		Value: settingsActionPrefixSwitch + "add:" + currentTarget,
 	}
 }
@@ -599,7 +601,7 @@ func (c *settingsCommand) pinnedProjectEntries() ([]intfzf.Entry, error) {
 	entries := []intfzf.Entry{settingsBackEntry()}
 	if c.switcher == nil {
 		return append(entries, intfzf.Entry{
-			Label: "\x1b[90m(no pinned projects)\x1b[0m",
+			Label: settingsLabelDim("(no pinned projects)", ""),
 			Value: settingsNoopValue,
 		}), nil
 	}
@@ -616,18 +618,18 @@ func (c *settingsCommand) pinnedProjectEntries() ([]intfzf.Entry, error) {
 
 	if len(pins) == 0 {
 		return append(entries, intfzf.Entry{
-			Label: "\x1b[90m(no pinned projects)\x1b[0m",
+			Label: settingsLabelDim("(no pinned projects)", ""),
 			Value: settingsNoopValue,
 		}), nil
 	}
 
 	entries = append(entries, intfzf.Entry{
-		Label: "x Clear all pins",
+		Label: settingsLabel(settingsGlyphRemove, settingsColorRemove, "Clear all pins", ""),
 		Value: settingsActionPrefixSwitch + "clear",
 	})
 	for _, pin := range pins {
 		entries = append(entries, intfzf.Entry{
-			Label: "x Remove  " + intrender.PrettyPath(pin, homeDir, repoRoot),
+			Label: settingsLabel(settingsGlyphRemove, settingsColorRemove, "Remove", intrender.PrettyPath(pin, homeDir, repoRoot)),
 			Value: settingsActionPrefixSwitch + "pin:" + pin,
 		})
 	}
@@ -639,62 +641,56 @@ func (c *settingsCommand) aiEntries() []intfzf.Entry {
 		return nil
 	}
 
-	rows := c.ai.settingsRows()
-	entries := make([]intfzf.Entry, 0, len(rows)+1)
+	current := c.ai.getMode()
+	modes := []struct {
+		mode string
+		desc string
+	}{
+		{aiModeSelective, "show picker each time"},
+		{aiModeClaude, "always run Claude split"},
+		{aiModeCodex, "always run Codex split"},
+		{aiModeShell, "always open zsh split"},
+	}
+
+	entries := make([]intfzf.Entry, 0, len(modes)+1)
 	entries = append(entries, settingsBackEntry())
-	for _, row := range rows {
+	for _, item := range modes {
+		glyph := settingsGlyphInactive
+		color := settingsColorDim
+		if item.mode == current {
+			glyph = settingsGlyphToggle
+			color = settingsColorAdd
+		}
 		entries = append(entries, intfzf.Entry{
-			Label: row.Label,
-			Value: settingsActionPrefixAI + row.Value,
+			Label: settingsLabel(glyph, color, item.mode, item.desc),
+			Value: settingsActionPrefixAI + item.mode,
 		})
 	}
 	return entries
 }
 
 func settingsAboutEntries() []intfzf.Entry {
-	return []intfzf.Entry{
-		settingsBackEntry(),
-		{
-			Label: "Version        projmux " + version.String(),
-			Value: settingsNoopValue,
-		},
-		{
-			Label: "Source         https://github.com/es5h/projmux",
-			Value: settingsNoopValue,
-		},
-		{
-			Label: "Update         go install github.com/es5h/projmux/cmd/projmux@latest",
-			Value: settingsNoopValue,
-		},
-		{
-			Label: "App            sidebar, sessions, projects, AI picker, settings",
-			Value: settingsNoopValue,
-		},
-		{
-			Label: "Tmux actions   new window, rename window/pane, previous/next window",
-			Value: settingsNoopValue,
-		},
-		{
-			Label: "Key model      terminal sends CSI-u keys; tmux runs projmux actions",
-			Value: settingsNoopValue,
-		},
-		{
-			Label: "Rename key     Ctrl-M sends 9011u, tmux maps User10 to rename",
-			Value: settingsNoopValue,
-		},
-		{
-			Label: "Ghostty        bind alt/ctrl keys to csi:9001u..9012u",
-			Value: settingsNoopValue,
-		},
-		{
-			Label: "Windows Term.  actions sendInput tmux/meta sequences; keybindings attach keys",
-			Value: settingsNoopValue,
-		},
-		{
-			Label: "Docs           docs/keybindings.md has copyable terminal examples",
-			Value: settingsNoopValue,
-		},
+	rows := []struct{ name, value string }{
+		{"Version", "projmux " + version.String()},
+		{"Source", "https://github.com/es5h/projmux"},
+		{"Update", "go install github.com/es5h/projmux/cmd/projmux@latest"},
+		{"App", "sidebar, sessions, projects, AI picker, settings"},
+		{"Tmux actions", "new window, rename window/pane, previous/next window"},
+		{"Key model", "terminal sends CSI-u keys; tmux runs projmux actions"},
+		{"Rename key", "Ctrl-M sends 9011u, tmux maps User10 to rename"},
+		{"Ghostty", "bind alt/ctrl keys to csi:9001u..9012u"},
+		{"Windows Term.", "actions sendInput tmux/meta sequences; keybindings attach keys"},
+		{"Docs", "docs/keybindings.md has copyable terminal examples"},
 	}
+	entries := make([]intfzf.Entry, 0, len(rows)+1)
+	entries = append(entries, settingsBackEntry())
+	for _, r := range rows {
+		entries = append(entries, intfzf.Entry{
+			Label: settingsLabelInfo(r.name, r.value, ""),
+			Value: settingsNoopValue,
+		})
+	}
+	return entries
 }
 
 func (c *settingsCommand) execute(value string, stdout, stderr io.Writer) error {
@@ -725,7 +721,7 @@ func (c *settingsCommand) execute(value string, stdout, stderr io.Writer) error 
 
 func settingsBackEntry() intfzf.Entry {
 	return intfzf.Entry{
-		Label: "\x1b[90m< Back\x1b[0m",
+		Label: settingsLabel(settingsGlyphBack, settingsColorBack, "Back", ""),
 		Value: settingsBackValue,
 	}
 }

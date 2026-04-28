@@ -294,8 +294,8 @@ func TestProjectPickerEntriesIncludesWorkdirsRows(t *testing.T) {
 	if !hasEntryValue(entries, settingsWorkdirList) {
 		t.Fatalf("project picker entries = %#v, want Workdirs entry", entries)
 	}
-	if !hasEntryLabelContaining(entries, "+ Add Workdir...") {
-		t.Fatalf("project picker entries = %#v, want '+ Add Workdir...' label", entries)
+	if !hasEntryLabelContaining(entries, "Add Workdir...") {
+		t.Fatalf("project picker entries = %#v, want 'Add Workdir...' label", entries)
 	}
 	if !hasEntryLabelContaining(entries, "Workdirs") {
 		t.Fatalf("project picker entries = %#v, want 'Workdirs' label", entries)
@@ -449,8 +449,18 @@ func TestWorkdirListEntriesSurfacesEnvSources(t *testing.T) {
 	if !hasEntryLabelContaining(entries, "/saved/a") {
 		t.Fatalf("workdir list entries = %#v, want saved entry", entries)
 	}
-	if !hasEntryLabelContaining(entries, managedRootsEnvVar+" = /env/one:/env/two") {
-		t.Fatalf("workdir list entries = %#v, want env source label", entries)
+	// The env source row now renders the variable name in the label column
+	// and the colon-separated value in the value column, with a "(env, ...)"
+	// source annotation. Verify the parts appear; the exact spacing comes
+	// from settingsLabelInfo padding.
+	if !hasEntryLabelContaining(entries, managedRootsEnvVar) {
+		t.Fatalf("workdir list entries = %#v, want env variable name", entries)
+	}
+	if !hasEntryLabelContaining(entries, "/env/one:/env/two") {
+		t.Fatalf("workdir list entries = %#v, want env value", entries)
+	}
+	if !hasEntryLabelContaining(entries, "(env, read-only)") {
+		t.Fatalf("workdir list entries = %#v, want env source annotation", entries)
 	}
 }
 
