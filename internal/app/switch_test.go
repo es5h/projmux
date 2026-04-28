@@ -377,6 +377,8 @@ func TestNewSwitchCommandUsesEnvAndDefaultPinStore(t *testing.T) {
 	t.Setenv("HOME", fixture.path("home"))
 	t.Setenv("XDG_CONFIG_HOME", configHome)
 	t.Setenv("XDG_STATE_HOME", stateHome)
+	t.Setenv("TMUX", "")
+	t.Setenv(projdirEnvVar, "")
 	t.Setenv(repoRootEnvVar, fixture.path("rp"))
 	t.Setenv(managedRootsEnvVar, fixture.path("managed"))
 
@@ -474,6 +476,8 @@ func TestNewSwitchCommandInfersRepoRootFromHomeSourceRepos(t *testing.T) {
 	t.Setenv("HOME", fixture.path("home"))
 	t.Setenv("XDG_CONFIG_HOME", fixture.path("xdg-config"))
 	t.Setenv("XDG_STATE_HOME", fixture.path("xdg-state"))
+	t.Setenv("TMUX", "")
+	t.Setenv(projdirEnvVar, "")
 	t.Setenv(repoRootEnvVar, "")
 	t.Chdir(fixture.path("home/source/repos/app/nested"))
 
