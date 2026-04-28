@@ -162,8 +162,10 @@ func runnerArgs(options Options, supportsFooter bool, filterFile string) []strin
 	if filterFile != "" {
 		args = append(args, "--disabled", "--bind", "change:reload("+searchKeyFilterCommand(filterFile)+")")
 	}
+	if !options.AcceptQuery {
+		args = append(args, "--exit-0")
+	}
 	args = append(args,
-		"--exit-0",
 		"--scrollbar", "█",
 		"--info", "inline-right",
 	)
