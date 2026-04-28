@@ -30,6 +30,7 @@ type App struct {
 	switcher     *switchCommand
 	tag          *tagCommand
 	tmux         *tmuxCommand
+	upgrade      *upgradeCommand
 }
 
 // New builds the default application graph.
@@ -53,6 +54,7 @@ func New() *App {
 		switcher:     switcher,
 		tag:          newTagCommand(),
 		tmux:         newTmuxCommand(),
+		upgrade:      newUpgradeCommand(),
 	}
 }
 
@@ -96,6 +98,8 @@ func (a *App) Run(args []string, stdout, stderr io.Writer) error {
 		return a.tag.Run(args[1:], stdout, stderr)
 	case "tmux":
 		return a.tmux.Run(args[1:], stdout, stderr)
+	case "upgrade":
+		return a.upgrade.Run(args[1:], stdout, stderr)
 	case "version", "--version", "-version":
 		_, err := fmt.Fprintf(stdout, "projmux %s\n", version.String())
 		return err
@@ -128,6 +132,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  switch    Pick and open a project tmux session")
 	fmt.Fprintln(w, "  tag       Manage tagged tmux sessions")
 	fmt.Fprintln(w, "  tmux      Open tmux popup entry helpers")
+	fmt.Fprintln(w, "  upgrade   Self-update projmux via go install")
 	fmt.Fprintln(w, "  help      Show bootstrap help")
 	fmt.Fprintln(w, "  version   Print the current version")
 }
