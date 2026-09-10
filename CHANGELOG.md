@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.15.1](https://github.com/crevissepartners/projmux/compare/v0.15.0...v0.15.1) (2026-09-10)
+
+
+### Features
+
+* **cli:** show age in default resource lists ([#959](https://github.com/crevissepartners/projmux/issues/959)) ([2f1de99](https://github.com/crevissepartners/projmux/commit/2f1de992b0036120582ad9a810a04d27b5d23ca7))
+* **doctor:** identify Codex endpoint generation mismatch risks ([#955](https://github.com/crevissepartners/projmux/issues/955)) ([4d3da1b](https://github.com/crevissepartners/projmux/commit/4d3da1b1c862e04bd0d232c84fb279185897dad8))
+* **doctor:** report stored Codex version-pair qualification ([#954](https://github.com/crevissepartners/projmux/issues/954)) ([b2c68c6](https://github.com/crevissepartners/projmux/commit/b2c68c6eba908d4bc9b0078d02c9f3a55a636aaa))
+
+
+### Bug Fixes
+
+* **agent:** expose source anchors and label unverified claims ([#956](https://github.com/crevissepartners/projmux/issues/956)) ([2bc0337](https://github.com/crevissepartners/projmux/commit/2bc0337159302a0c7a271056681bc2cdb20fc586))
+* **agent:** preserve failed reply causes and safe retry paths ([#960](https://github.com/crevissepartners/projmux/issues/960)) ([95ecd01](https://github.com/crevissepartners/projmux/commit/95ecd01537aaf2bacdf50e29a6f5989400a9d10e))
+* **agent:** preserve provider frame rejection reasons ([#957](https://github.com/crevissepartners/projmux/issues/957)) ([c780a16](https://github.com/crevissepartners/projmux/commit/c780a16c43f1c734a4ea6d7bbe91a1d780ab1cee))
+* **agent:** report Codex coordination push failures to senders ([#962](https://github.com/crevissepartners/projmux/issues/962)) ([18b0e9f](https://github.com/crevissepartners/projmux/commit/18b0e9f6282e5cd46bc511053338e103d4d62b6b))
+* **codex:** make unmanaged endpoint recovery guidance actionable ([#961](https://github.com/crevissepartners/projmux/issues/961)) ([d0bd5d9](https://github.com/crevissepartners/projmux/commit/d0bd5d94171111e47b117976bb3eb52f44069259))
+
 ## [0.15.0](https://github.com/crevissepartners/projmux/compare/v0.14.2...v0.15.0) (2026-09-09)
 
 
